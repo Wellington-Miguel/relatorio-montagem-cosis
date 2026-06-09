@@ -22,6 +22,7 @@ from utils import (
     registros_para_dataframe, to_csv_bytes, to_excel_bytes,
     itens_para_df_exibicao, formatar_tipo,
 )
+from styles import CSS
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -31,9 +32,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 init_db()
+st.markdown(CSS, unsafe_allow_html=True)
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.title(f"{APP_ICON} {APP_TITLE}")
+st.markdown(f"<h1>{APP_ICON} <span>{APP_TITLE}</span></h1>", unsafe_allow_html=True)
 st.caption(f"{APP_DESC}  ·  v{VERSION}")
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -293,16 +295,16 @@ elif pagina == "🔍 Consultar Registros":
             n_def = sum(1 for i in itens if i["defeituoso"])
             n_aus = sum(1 for i in itens if not i["consta"])
 
-            badge_def = f"⚠️ {n_def} defeito(s)  " if n_def else ""
-            badge_aus = f"📭 {n_aus} ausente(s)  " if n_aus else ""
-            badges    = badge_def + badge_aus if (badge_def or badge_aus) else "✅ Tudo OK"
+            badge_def = f'<span class="badge-err">{n_def} defeito(s)</span>&nbsp;' if n_def else ""
+            badge_aus = f'<span class="badge-warn">{n_aus} ausente(s)</span>' if n_aus else ""
+            badges    = f"{badge_def}{badge_aus}".strip() if (badge_def or badge_aus) else '<span class="badge-ok">Tudo OK</span>'
 
             with st.expander(
                 f"#{reg['id']} · {reg['data_evento']} · "
                 f"{reg['tipo'].upper()} · {reg['local']} · "
                 f"Técnico: {reg['tecnico']} · Kits: {reg['qtd_kits']}"
             ):
-                st.markdown(f"**Status:** {badges}")
+                st.markdown(f"**Status:** {badges}", unsafe_allow_html=True)
                 st.markdown("")
 
                 m1, m2, m3, m4, m5 = st.columns(5)
