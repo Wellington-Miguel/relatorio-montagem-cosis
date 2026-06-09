@@ -22,7 +22,6 @@ from utils import (
     registros_para_dataframe, to_csv_bytes, to_excel_bytes,
     itens_para_df_exibicao, formatar_tipo,
 )
-from styles import CSS
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -32,40 +31,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 init_db()
-st.markdown(CSS, unsafe_allow_html=True)
-
-# ── Estilos Complementares (Tema e Responsividade) ───────────────────────────
-st.markdown("""
-<style>
-    /* Cards do Dashboard com estética escura e limpa */
-    .stat-card {
-        background-color: #1A1C23;
-        border-left: 4px solid #50C878;
-        padding: 1.5rem 1rem;
-        border-radius: 8px;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        margin-bottom: 1rem;
-        transition: transform 0.2s;
-    }
-    .stat-card:hover { transform: translateY(-3px); }
-    .stat-card .val { font-size: 2em; font-weight: bold; color: #50C878; line-height: 1.2; }
-    .stat-card .lbl { font-size: 0.85em; color: #CCCCCC; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; }
-    
-    /* Melhoria na responsividade em telas menores (Celulares) */
-    @media (max-width: 768px) {
-        div.stButton > button { width: 100%; }
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<div class="main-header">
-    <h1>{APP_ICON} {APP_TITLE}</h1>
-    <p>{APP_DESC} &nbsp;·&nbsp; v{VERSION}</p>
-</div>
-""", unsafe_allow_html=True)
+st.title(f"{APP_ICON} {APP_TITLE}")
+st.caption(f"{APP_DESC}  ·  v{VERSION}")
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -102,14 +71,10 @@ if pagina == "📋 Novo Registro":
     st.subheader("📋 Registrar Montagem / Desmontagem")
 
     # ── Verificações adicionais ──────────────────────────────────────────────
-    st.markdown("""
-    <div class="alerta-box">
-        <h4>⚠️ Verificações Adicionais — Leia com atenção antes de preencher!</h4>
-        <ul>
-    """ + "".join(f"<li>{v}</li>" for v in VERIFICACOES_ADICIONAIS) + """
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    st.warning(
+        "**⚠️ Verificações Adicionais — Leia com atenção antes de preencher!**\n\n"
+        + "\n".join(f"- {v}" for v in VERIFICACOES_ADICIONAIS)
+    )
 
     confirmou = st.checkbox(
         "✅ Confirmo que li e realizei todas as verificações adicionais acima.",
@@ -179,7 +144,6 @@ if pagina == "📋 Novo Registro":
 
     itens_form = []
     for eq in EQUIPAMENTOS:
-        st.markdown('<div class="equip-row">', unsafe_allow_html=True)
         c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
         with c1:
             st.markdown(f"**{eq}**")
@@ -198,7 +162,6 @@ if pagina == "📋 Novo Registro":
                     "Descrição do defeito", key=f"obs_{eq}",
                     placeholder="Descreva brevemente..."
                 )
-        st.markdown("</div>", unsafe_allow_html=True)
 
         itens_form.append({
             "equipamento": eq,
@@ -330,16 +293,16 @@ elif pagina == "🔍 Consultar Registros":
             n_def = sum(1 for i in itens if i["defeituoso"])
             n_aus = sum(1 for i in itens if not i["consta"])
 
-            badge_def = f'<span class="badge-def">⚠️ {n_def} defeito(s)</span> ' if n_def else ""
-            badge_aus = f'<span class="badge-tip">📭 {n_aus} ausente(s)</span> '  if n_aus else ""
-            badges    = badge_def + badge_aus or '<span class="badge-ok">✓ Tudo OK</span>'
+            badge_def = f"⚠️ {n_def} defeito(s)  " if n_def else ""
+            badge_aus = f"📭 {n_aus} ausente(s)  " if n_aus else ""
+            badges    = badge_def + badge_aus if (badge_def or badge_aus) else "✅ Tudo OK"
 
             with st.expander(
                 f"#{reg['id']} · {reg['data_evento']} · "
                 f"{reg['tipo'].upper()} · {reg['local']} · "
                 f"Técnico: {reg['tecnico']} · Kits: {reg['qtd_kits']}"
             ):
-                st.markdown(badges, unsafe_allow_html=True)
+                st.markdown(f"**Status:** {badges}")
                 st.markdown("")
 
                 m1, m2, m3, m4, m5 = st.columns(5)
@@ -461,23 +424,15 @@ elif pagina == "📊 Dashboard":
     stats = stats_gerais()
 
     # ── Cards ────────────────────────────────────────────────────────────────
-    cards = [
-        (stats["total_registros"],   "Total de Registros", "📋"),
-        (stats["total_montagens"],   "Montagens",          "🔧"),
-        (stats["total_desmontagens"],"Desmontagens",       "📦"),
-        (stats["total_defeitos"],    "Itens com Defeito",  "⚠️"),
-        (stats["total_kits"],        "Kits Movimentados",  "🗃️"),
-        (stats["total_tecnicos"],    "Técnicos",           "👤"),
-    ]
-    cols = st.columns(len(cards))
-    for col, (val, lbl, icon) in zip(cols, cards):
-        col.markdown(
-            f'<div class="stat-card">'
-            f'<div class="val">{icon}<br>{val}</div>'
-            f'<div class="lbl">{lbl}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+    met1, met2, met3 = st.columns(3)
+    met1.metric("📋 Total de Registros", stats["total_registros"])
+    met2.metric("🔧 Montagens", stats["total_montagens"])
+    met3.metric("📦 Desmontagens", stats["total_desmontagens"])
+    
+    met4, met5, met6 = st.columns(3)
+    met4.metric("⚠️ Itens com Defeito", stats["total_defeitos"])
+    met5.metric("🗃️ Kits Movimentados", stats["total_kits"])
+    met6.metric("👤 Técnicos", stats["total_tecnicos"])
 
     st.markdown("---")
 
