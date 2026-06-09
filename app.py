@@ -44,10 +44,10 @@ with st.sidebar:
     pagina = st.radio(
         "Navegação",
         [
-            "📋 Novo Registro",
-            "🔍 Consultar Registros",
-            "⚠️ Equipamentos Defeituosos",
-            "📊 Dashboard",
+            "Novo Registro",
+            "Consultar Registros",
+            "Equipamentos Defeituosos",
+            "Dashboard",
         ],
         label_visibility="collapsed",
     )
@@ -74,12 +74,12 @@ if pagina == "📋 Novo Registro":
 
     # ── Verificações adicionais ──────────────────────────────────────────────
     st.warning(
-        "**⚠️ Verificações Adicionais — Leia com atenção antes de preencher!**\n\n"
+        "⚠️ Verificações Adicionais — Leia com atenção antes de preencher!\n\n"
         + "\n".join(f"- {v}" for v in VERIFICACOES_ADICIONAIS)
     )
 
     confirmou = st.checkbox(
-        "✅ Confirmo que li e realizei todas as verificações adicionais acima.",
+        "Confirmo que li e realizei todas as verificações adicionais acima.",
         key="check_verificacoes",
     )
     if not confirmou:
