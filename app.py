@@ -146,24 +146,25 @@ if pagina == "Novo Registro":
 
     itens_form = []
     for eq in EQUIPAMENTOS:
-        c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
-        with c1:
-            st.markdown(f"**{eq}**")
-        with c2:
-            consta = st.checkbox("Consta", key=f"consta_{eq}", value=True)
-        with c3:
-            defeituoso = st.checkbox("⚠️ Defeito", key=f"def_{eq}")
-        kit_def = obs_item = ""
-        if defeituoso:
-            with c4:
-                kit_def = st.text_input(
-                    "Nº Kit", key=f"kitdef_{eq}", placeholder="Ex: 03"
-                )
-            with c5:
-                obs_item = st.text_input(
-                    "Descrição do defeito", key=f"obs_{eq}",
-                    placeholder="Descreva brevemente..."
-                )
+        with st.container(border=True):
+            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
+            with c1:
+                st.markdown(f"**{eq}**")
+            with c2:
+                consta = st.checkbox("Consta", key=f"consta_{eq}", value=True)
+            with c3:
+                defeituoso = st.checkbox("⚠️ Defeito", key=f"def_{eq}")
+            kit_def = obs_item = ""
+            if defeituoso:
+                with c4:
+                    kit_def = st.text_input(
+                        "Nº Kit", key=f"kitdef_{eq}", placeholder="Ex: 03"
+                    )
+                with c5:
+                    obs_item = st.text_input(
+                        "Descrição do defeito", key=f"obs_{eq}",
+                        placeholder="Descreva brevemente..."
+                    )
 
         itens_form.append({
             "equipamento": eq,
@@ -442,42 +443,46 @@ elif pagina == "Dashboard":
     gc1, gc2 = st.columns(2)
 
     with gc1:
-        st.markdown("### 📅 Registros por Data")
-        df_tempo = serie_temporal()
-        if not df_tempo.empty:
-            pivot = df_tempo.pivot(
-                index="Data", columns="Tipo", values="Qtd"
-            ).fillna(0)
-            st.bar_chart(pivot)
-        else:
-            st.info("Sem dados ainda.")
+        with st.container(border=True):
+            st.markdown("### 📅 Registros por Data")
+            df_tempo = serie_temporal()
+            if not df_tempo.empty:
+                pivot = df_tempo.pivot(
+                    index="Data", columns="Tipo", values="Qtd"
+                ).fillna(0)
+                st.bar_chart(pivot)
+            else:
+                st.info("Sem dados ainda.")
 
     with gc2:
-        st.markdown("### 👤 Registros por Técnico")
-        df_tec = operacoes_por_tecnico()
-        if not df_tec.empty:
-            pivot_tec = df_tec.pivot(
-                index="Técnico", columns="Tipo", values="Qtd"
-            ).fillna(0)
-            st.bar_chart(pivot_tec)
-        else:
-            st.info("Sem dados ainda.")
+        with st.container(border=True):
+            st.markdown("### 👤 Registros por Técnico")
+            df_tec = operacoes_por_tecnico()
+            if not df_tec.empty:
+                pivot_tec = df_tec.pivot(
+                    index="Técnico", columns="Tipo", values="Qtd"
+                ).fillna(0)
+                st.bar_chart(pivot_tec)
+            else:
+                st.info("Sem dados ainda.")
 
-    st.markdown("### ⚠️ Equipamentos com Mais Defeitos")
-    df_def_eq = defeitos_por_equipamento()
-    if not df_def_eq.empty:
-        st.bar_chart(df_def_eq.set_index("Equipamento"))
-    else:
-        st.success("✅ Nenhum defeito registrado até o momento!")
+    with st.container(border=True):
+        st.markdown("### ⚠️ Equipamentos com Mais Defeitos")
+        df_def_eq = defeitos_por_equipamento()
+        if not df_def_eq.empty:
+            st.bar_chart(df_def_eq.set_index("Equipamento"))
+        else:
+            st.success("✅ Nenhum defeito registrado até o momento!")
 
     # ── Tabela recente ────────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### 🕐 Últimos 10 Registros")
-    df_ult = ultimos_registros(10)
-    if df_ult.empty:
-        st.info("Nenhum registro encontrado ainda.")
-    else:
-        st.dataframe(df_ult, use_container_width=True, hide_index=True)
+    with st.container(border=True):
+        st.markdown("### 🕐 Últimos 10 Registros")
+        df_ult = ultimos_registros(10)
+        if df_ult.empty:
+            st.info("Nenhum registro encontrado ainda.")
+        else:
+            st.dataframe(df_ult, use_container_width=True, hide_index=True)
 
     # ── Botão exportação completa ─────────────────────────────────────────────
     st.markdown("---")

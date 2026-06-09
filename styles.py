@@ -18,8 +18,8 @@ h1 span {
 
 /* ── Cards de Métricas (Dashboard e Resumos) ─────────────── */
 div[data-testid="metric-container"] {
-    background-color: #12141A;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: #1A1D24;
+    border: 1px solid rgba(80, 200, 120, 0.25) !important;
     border-radius: 8px;
     padding: 1rem 1.5rem;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
@@ -32,9 +32,9 @@ div[data-testid="metric-container"]:hover {
 }
 /* Estilo do Rótulo da Métrica */
 div[data-testid="metric-container"] label {
-    color: #A0AEC0 !important;
-    font-weight: 500;
-    font-size: 0.85rem !important;
+    color: #E2E8F0 !important;
+    font-weight: 600;
+    font-size: 0.95rem !important;
     letter-spacing: 0.5px;
 }
 /* Estilo do Valor da Métrica */
