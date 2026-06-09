@@ -24,7 +24,7 @@ VERIFICACOES_ADICIONAIS = [
     "Verificar se há alguma **avaria visível** nos equipamentos.",
 ]
 
-APP_TITLE = "Gestão de monstagem e desmontagem — Ações Sociais"
+APP_TITLE = "Relatório Kit Biométrico — Ações Sociais"
 APP_ICON  = "🖥️"
-APP_DESC  = "Versão"
+APP_DESC  = "Sistema de Gestão de Montagem e Desmontagem"
 VERSION   = "1.0.0"
