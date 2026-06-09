@@ -16,34 +16,6 @@ h1 span {
     font-weight: 600;
 }
 
-/* ── Cards de Métricas (Dashboard e Resumos) ─────────────── */
-div[data-testid="metric-container"] {
-    background-color: #1A1D24;
-    border: 1px solid rgba(80, 200, 120, 0.25) !important;
-    border-radius: 8px;
-    padding: 1rem 1.5rem;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    transition: transform 0.2s ease, border-color 0.2s ease;
-    border-left: 4px solid #50C878;
-}
-div[data-testid="metric-container"]:hover {
-    transform: translateY(-2px);
-    border-color: rgba(80, 200, 120, 0.3);
-}
-/* Estilo do Rótulo da Métrica */
-div[data-testid="metric-container"] label {
-    color: #E2E8F0 !important;
-    font-weight: 600;
-    font-size: 0.95rem !important;
-    letter-spacing: 0.5px;
-}
-/* Estilo do Valor da Métrica */
-div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
-    color: #FAFAFA !important;
-    font-weight: 700;
-    font-size: 2rem !important;
-}
-
 /* ── Expanders ───────────────────────────────────────────── */
 div[data-testid="stExpander"] {
     background-color: #12141A;

@@ -153,7 +153,7 @@ if pagina == "Novo Registro":
             with c2:
                 consta = st.checkbox("Consta", key=f"consta_{eq}", value=True)
             with c3:
-                defeituoso = st.checkbox("⚠️ Defeito", key=f"def_{eq}")
+                defeituoso = st.checkbox("Defeito", key=f"def_{eq}")
             kit_def = obs_item = ""
             if defeituoso:
                 with c4:
@@ -193,9 +193,12 @@ if pagina == "Novo Registro":
     n_defeitos  = sum(1 for i in itens_form if i["defeituoso"])
 
     rc1, rc2, rc3 = st.columns(3)
-    rc1.metric("✅ Equipamentos presentes", n_consta)
-    rc2.metric("❌ Equipamentos ausentes",  n_faltando)
-    rc3.metric("⚠️ Com defeito",            n_defeitos)
+    with rc1.container(border=True):
+        st.metric("✅ Equipamentos presentes", n_consta)
+    with rc2.container(border=True):
+        st.metric("❌ Equipamentos ausentes",  n_faltando)
+    with rc3.container(border=True):
+        st.metric("⚠️ Com defeito",            n_defeitos)
 
     salvar_btn = st.button("💾 Salvar Registro", type="primary", use_container_width=False)
 
@@ -428,14 +431,20 @@ elif pagina == "Dashboard":
 
     # ── Cards ────────────────────────────────────────────────────────────────
     met1, met2, met3 = st.columns(3)
-    met1.metric("📋 Total de Registros", stats["total_registros"])
-    met2.metric("🔧 Montagens", stats["total_montagens"])
-    met3.metric("📦 Desmontagens", stats["total_desmontagens"])
+    with met1.container(border=True):
+        st.metric("📋 Total de Registros", stats["total_registros"])
+    with met2.container(border=True):
+        st.metric("🔧 Montagens", stats["total_montagens"])
+    with met3.container(border=True):
+        st.metric("📦 Desmontagens", stats["total_desmontagens"])
     
     met4, met5, met6 = st.columns(3)
-    met4.metric("⚠️ Itens com Defeito", stats["total_defeitos"])
-    met5.metric("🗃️ Kits Movimentados", stats["total_kits"])
-    met6.metric("👤 Técnicos", stats["total_tecnicos"])
+    with met4.container(border=True):
+        st.metric("⚠️ Itens com Defeito", stats["total_defeitos"])
+    with met5.container(border=True):
+        st.metric("🗃️ Kits Movimentados", stats["total_kits"])
+    with met6.container(border=True):
+        st.metric("👤 Técnicos", stats["total_tecnicos"])
 
     st.markdown("---")
 
