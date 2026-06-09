@@ -20,7 +20,7 @@ from database import (
 )
 from utils import (
     registros_para_dataframe, to_csv_bytes, to_excel_bytes,
-    itens_para_df_exibicao, formatar_tipo,
+    itens_para_df_exibicao, formatar_tipo, formatar_data
 )
 from styles import CSS
 
@@ -133,7 +133,7 @@ if pagina == "Novo Registro":
             local = loc_novo.strip()
 
     with col5:
-        data_evento = st.date_input("📅 Data *", value=date.today())
+        data_evento = st.date_input("📅 Data *", value=date.today(), format="DD/MM/YYYY")
 
     st.markdown("---")
 
@@ -253,9 +253,9 @@ elif pagina == "Consultar Registros":
         with fc3:
             f_tipo = st.selectbox("Tipo", ["Todos", "Montagem", "Desmontagem"])
         with fc4:
-            f_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="ci")
+            f_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="ci", format="DD/MM/YYYY")
         with fc5:
-            f_fim = st.date_input("📅 Até", value=date.today(),     key="cf")
+            f_fim = st.date_input("📅 Até", value=date.today(),     key="cf", format="DD/MM/YYYY")
 
     registros = buscar_registros(
         tecnico=f_tec or None,
@@ -304,7 +304,7 @@ elif pagina == "Consultar Registros":
             badges    = f"{badge_def}{badge_aus}".strip() if (badge_def or badge_aus) else '<span class="badge-ok">Tudo OK</span>'
 
             with st.expander(
-                f"#{reg['id']} · {reg['data_evento']} · "
+                f"#{reg['id']} · {formatar_data(reg['data_evento'])} · "
                 f"{reg['tipo'].upper()} · {reg['local']} · "
                 f"Técnico: {reg['tecnico']} · Kits: {reg['qtd_kits']}"
             ):
@@ -315,7 +315,7 @@ elif pagina == "Consultar Registros":
                 m1.metric("Técnico",  reg["tecnico"])
                 m2.metric("Tipo",     reg["tipo"])
                 m3.metric("Kits",     reg["qtd_kits"])
-                m4.metric("Data",     reg["data_evento"])
+                m4.metric("Data",     formatar_data(reg["data_evento"]))
                 m5.metric("Defeitos", n_def)
 
                 st.markdown(f"**📍 Local:** {reg['local']}")
@@ -330,7 +330,7 @@ elif pagina == "Consultar Registros":
                 if reg["observacoes"]:
                     st.info(f"📝 **Observações:** {reg['observacoes']}")
 
-                st.caption(f"Registrado em: {reg['criado_em']}")
+                st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}")
 
                 btn1, btn2, btn3 = st.columns([1, 1.5, 4])
                 with btn1:
@@ -363,9 +363,9 @@ elif pagina == "Equipamentos Defeituosos":
         with d1:
             d_tec = st.text_input("👤 Técnico", key="dtec")
         with d2:
-            d_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="dini")
+            d_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="dini", format="DD/MM/YYYY")
         with d3:
-            d_fim = st.date_input("📅 Até", value=date.today(),     key="dfim")
+            d_fim = st.date_input("📅 Até", value=date.today(),     key="dfim", format="DD/MM/YYYY")
         with d4:
             d_eq = st.selectbox("🔧 Equipamento", ["Todos"] + EQUIPAMENTOS, key="deq")
 
@@ -392,6 +392,7 @@ elif pagina == "Equipamentos Defeituosos":
             "obs_item":     "Descrição do Defeito",
         })
 
+        df_def["Data"] = pd.to_datetime(df_def["Data"]).dt.strftime("%d/%m/%Y")
         st.dataframe(df_def, use_container_width=True, hide_index=True)
 
         # Gráfico
@@ -456,6 +457,7 @@ elif pagina == "Dashboard":
             st.markdown("### 📅 Registros por Data")
             df_tempo = serie_temporal()
             if not df_tempo.empty:
+                df_tempo["Data"] = pd.to_datetime(df_tempo["Data"])
                 pivot = df_tempo.pivot(
                     index="Data", columns="Tipo", values="Qtd"
                 ).fillna(0)
@@ -491,6 +493,7 @@ elif pagina == "Dashboard":
         if df_ult.empty:
             st.info("Nenhum registro encontrado ainda.")
         else:
+            df_ult["Data"] = pd.to_datetime(df_ult["Data"]).dt.strftime("%d/%m/%Y")
             st.dataframe(df_ult, use_container_width=True, hide_index=True)
 
     # ── Botão exportação completa ─────────────────────────────────────────────

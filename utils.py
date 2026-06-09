@@ -4,6 +4,7 @@ Funções auxiliares: exportação, formatação, etc.
 """
 
 import io
+from datetime import datetime
 import pandas as pd
 from database import buscar_itens
 
@@ -15,7 +16,7 @@ def registros_para_dataframe(registros: list[dict]) -> pd.DataFrame:
         for item in buscar_itens(reg["id"]):
             rows.append({
                 "ID":                   reg["id"],
-                "Data":                 reg["data_evento"],
+                "Data":                 formatar_data(reg["data_evento"]),
                 "Tipo":                 reg["tipo"],
                 "Técnico":              reg["tecnico"],
                 "Local":                reg["local"],
@@ -26,10 +27,23 @@ def registros_para_dataframe(registros: list[dict]) -> pd.DataFrame:
                 "Defeituoso":           "Sim" if item["defeituoso"] else "Não",
                 "Nº Kit Defeituoso":    item["kit_defeito"],
                 "Obs. Equipamento":     item["obs_item"],
-                "Registrado em":        reg["criado_em"],
+                "Registrado em":        formatar_data(reg["criado_em"]),
             })
     return pd.DataFrame(rows)
 
+def formatar_data(data_str: str) -> str:
+    """Converte YYYY-MM-DD HH:MM:SS ou YYYY-MM-DD para o padrão brasileiro"""
+    if not data_str: return ""
+    try:
+        val = str(data_str)
+        if " " in val:
+            dt = datetime.strptime(val[:19], "%Y-%m-%d %H:%M:%S")
+            return dt.strftime("%d/%m/%Y %H:%M")
+        else:
+            dt = datetime.strptime(val[:10], "%Y-%m-%d")
+            return dt.strftime("%d/%m/%Y")
+    except ValueError:
+        return str(data_str)
 
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8-sig")
