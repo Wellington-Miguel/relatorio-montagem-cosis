@@ -34,6 +34,31 @@ st.set_page_config(
 init_db()
 st.markdown(CSS, unsafe_allow_html=True)
 
+# ── Estilos Complementares (Tema e Responsividade) ───────────────────────────
+st.markdown("""
+<style>
+    /* Cards do Dashboard com estética escura e limpa */
+    .stat-card {
+        background-color: #1A1C23;
+        border-left: 4px solid #50C878;
+        padding: 1.5rem 1rem;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        margin-bottom: 1rem;
+        transition: transform 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-3px); }
+    .stat-card .val { font-size: 2em; font-weight: bold; color: #50C878; line-height: 1.2; }
+    .stat-card .lbl { font-size: 0.85em; color: #CCCCCC; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; }
+    
+    /* Melhoria na responsividade em telas menores (Celulares) */
+    @media (max-width: 768px) {
+        div.stButton > button { width: 100%; }
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ── Header ───────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="main-header">
@@ -116,7 +141,7 @@ if pagina == "📋 Novo Registro":
             tecnico = tec_novo.strip()
 
     with col2:
-        tipo = st.radio("🔧 Tipo de Operação *", ["Montagem", "Desmontagem"], horizontal=False)
+        tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], horizontal=False)
 
     with col3:
         qtd_kits = st.number_input(
@@ -127,7 +152,7 @@ if pagina == "📋 Novo Registro":
     with col4:
         loc_list = [""] + listar_locais()
         loc_novo = st.text_input(
-            "📍 Local da Operação *",
+            "📍 Local *",
             placeholder="Ex: CRAS Norte – Rua das Flores, 123",
         )
         if len(loc_list) > 1:
@@ -141,7 +166,7 @@ if pagina == "📋 Novo Registro":
             local = loc_novo.strip()
 
     with col5:
-        data_evento = st.date_input("📅 Data da Operação *", value=date.today())
+        data_evento = st.date_input("📅 Data *", value=date.today())
 
     st.markdown("---")
 
@@ -213,7 +238,7 @@ if pagina == "📋 Novo Registro":
         if not tecnico:
             erros.append("⛔ Nome do técnico é obrigatório.")
         if not local:
-            erros.append("⛔ Local da operação é obrigatório.")
+            erros.append("⛔ Local é obrigatório.")
         if erros:
             for e in erros:
                 st.error(e)
@@ -460,7 +485,7 @@ elif pagina == "📊 Dashboard":
     gc1, gc2 = st.columns(2)
 
     with gc1:
-        st.markdown("### 📅 Operações por Data")
+        st.markdown("### 📅 Registros por Data")
         df_tempo = serie_temporal()
         if not df_tempo.empty:
             pivot = df_tempo.pivot(
@@ -471,7 +496,7 @@ elif pagina == "📊 Dashboard":
             st.info("Sem dados ainda.")
 
     with gc2:
-        st.markdown("### 👤 Operações por Técnico")
+        st.markdown("### 👤 Registros por Técnico")
         df_tec = operacoes_por_tecnico()
         if not df_tec.empty:
             pivot_tec = df_tec.pivot(
@@ -490,10 +515,10 @@ elif pagina == "📊 Dashboard":
 
     # ── Tabela recente ────────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### 🕐 Últimas 10 Operações")
+    st.markdown("### 🕐 Últimos 10 Registros")
     df_ult = ultimos_registros(10)
     if df_ult.empty:
-        st.info("Nenhuma operação registrada ainda.")
+        st.info("Nenhum registro encontrado ainda.")
     else:
         st.dataframe(df_ult, use_container_width=True, hide_index=True)
 
