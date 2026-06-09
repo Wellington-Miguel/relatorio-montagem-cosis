@@ -68,7 +68,7 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 1 — NOVO REGISTRO
 # ════════════════════════════════════════════════════════════════════════════
-if pagina == "📋 Novo Registro":
+if pagina == "Novo Registro":
 
     st.subheader("📋 Registrar Montagem / Desmontagem")
 
@@ -236,7 +236,7 @@ if pagina == "📋 Novo Registro":
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 2 — CONSULTAR REGISTROS
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "🔍 Consultar Registros":
+elif pagina == "Consultar Registros":
 
     st.subheader("🔍 Consultar Registros")
 
@@ -350,7 +350,7 @@ elif pagina == "🔍 Consultar Registros":
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 3 — EQUIPAMENTOS DEFEITUOSOS
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "⚠️ Equipamentos Defeituosos":
+elif pagina == "Equipamentos Defeituosos":
 
     st.subheader("⚠️ Relatório de Equipamentos Defeituosos")
 
@@ -419,7 +419,7 @@ elif pagina == "⚠️ Equipamentos Defeituosos":
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 4 — DASHBOARD
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "📊 Dashboard":
+elif pagina == "Dashboard":
 
     st.subheader("📊 Dashboard Geral")
 
