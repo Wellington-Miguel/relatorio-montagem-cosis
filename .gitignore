@@ -1,0 +1,18 @@
+# Segredos — NUNCA versionar
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
