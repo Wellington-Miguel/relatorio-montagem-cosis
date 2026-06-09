@@ -29,7 +29,7 @@ st.set_page_config(
     page_title=APP_TITLE,
     page_icon=APP_ICON,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 init_db()
 st.markdown(CSS, unsafe_allow_html=True)
@@ -62,7 +62,7 @@ with st.sidebar:
     - Kits movimentados: **{stats['total_kits']}**
     """)
     st.markdown("---")
-    st.caption(f"💾 Dados persistidos em SQLite local.\nVersão {VERSION}")
+    st.caption(f"☁️ Banco de Dados: Supabase (PostgreSQL)\nVersão {VERSION}")
 
 
 # ════════════════════════════════════════════════════════════════════════════
