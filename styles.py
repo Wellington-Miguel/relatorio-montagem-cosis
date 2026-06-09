@@ -13,7 +13,6 @@ h1 {
     letter-spacing: -1px;
 }
 h1 span {
-    color: #50C878;
     font-weight: 600;
 }
 
