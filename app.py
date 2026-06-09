@@ -334,10 +334,12 @@ elif pagina == "Consultar Registros":
 
                 btn1, btn2, btn3 = st.columns([1, 1.5, 4])
                 with btn1:
-                    if st.button("🗑️ Excluir", key=f"del_{reg['id']}"):
-                        deletar_registro(reg["id"])
-                        st.success("Registro excluído.")
-                        st.rerun()
+                    with st.popover("🗑️ Excluir"):
+                        st.warning("⚠️ **Atenção:** Esta ação é irreversível e apagará todos os itens vinculados a este registro.")
+                        if st.button("✔️ Confirmar Exclusão", key=f"conf_del_{reg['id']}", type="primary", use_container_width=True):
+                            deletar_registro(reg["id"])
+                            st.success("Registro excluído.")
+                            st.rerun()
                 with btn2:
                     df_reg = registros_para_dataframe([reg])
                     st.download_button(
