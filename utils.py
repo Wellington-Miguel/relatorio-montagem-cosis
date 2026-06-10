@@ -21,6 +21,7 @@ def registros_para_dataframe(registros: list[dict]) -> pd.DataFrame:
                 "Técnico":              reg["tecnico"],
                 "Local":                reg["local"],
                 "Qtd. Kits":            reg["qtd_kits"],
+                "Kits Usados":          reg.get("kits_usados", ""),
                 "Observações Gerais":   reg["observacoes"],
                 "Equipamento":          item["equipamento"],
                 "Consta":               "Sim" if item["consta"]     else "Não",

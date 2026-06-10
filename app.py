@@ -8,13 +8,13 @@ import pandas as pd
 from datetime import date, datetime
 
 from constants import (
-    EQUIPAMENTOS, VERIFICACOES_ADICIONAIS,
+    EQUIPAMENTOS, VERIFICACOES_ADICIONAIS, TECNICOS,
     APP_TITLE, APP_ICON, APP_DESC, VERSION,
 )
 from database import (
     init_db, salvar_registro, deletar_registro,
     buscar_registros, buscar_itens, buscar_defeituosos,
-    listar_tecnicos, listar_locais,
+    listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
     operacoes_por_tecnico, ultimos_registros,
 )
@@ -90,22 +90,9 @@ if pagina == "Novo Registro":
 
     # ── Dados gerais ─────────────────────────────────────────────────────────
     st.markdown("### 1. Dados Gerais")
-    col1, col2, col3 = st.columns([3, 1, 1])
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
     with col1:
-        tec_list = [""] + listar_tecnicos()
-        tec_novo = st.text_input(
-            "👤 Técnico Responsável *",
-            placeholder="Digite o nome ou escolha abaixo",
-        )
-        if len(tec_list) > 1:
-            tec_sel = st.selectbox(
-                "Ou selecione um técnico já cadastrado:",
-                tec_list,
-                label_visibility="collapsed",
-            )
-            tecnico = tec_novo.strip() or tec_sel
-        else:
-            tecnico = tec_novo.strip()
+        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS)
 
     with col2:
         tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], horizontal=False)
@@ -114,9 +101,15 @@ if pagina == "Novo Registro":
         qtd_kits = st.number_input(
             "📦 Qtd. de Kits *", min_value=1, max_value=99, value=1, step=1
         )
-
-    col4, col5 = st.columns([3, 1])
+        
     with col4:
+        kits_usados = st.text_input(
+            "🧰 Kits Usados *",
+            placeholder="Ex: Kit 01, Kit 03",
+        )
+
+    col_loc, col_dt = st.columns([3, 1])
+    with col_loc:
         loc_list = [""] + listar_locais()
         loc_novo = st.text_input(
             "📍 Local *",
@@ -132,7 +125,7 @@ if pagina == "Novo Registro":
         else:
             local = loc_novo.strip()
 
-    with col5:
+    with col_dt:
         data_evento = st.date_input("📅 Data *", value=date.today(), format="DD/MM/YYYY")
 
     st.markdown("---")
@@ -206,6 +199,8 @@ if pagina == "Novo Registro":
         erros = []
         if not tecnico:
             erros.append("⛔ Nome do técnico é obrigatório.")
+        if not kits_usados.strip():
+            erros.append("⛔ O preenchimento dos kits usados é obrigatório.")
         if not local:
             erros.append("⛔ Local é obrigatório.")
         if erros:
@@ -214,7 +209,7 @@ if pagina == "Novo Registro":
         else:
             with st.spinner("Salvando..."):
                 rid = salvar_registro(
-                    tecnico, tipo, local, qtd_kits,
+                    tecnico, tipo, local, qtd_kits, kits_usados.strip(),
                     data_evento, observacoes, itens_form,
                 )
             st.success(f"✅ Registro **#{rid}** salvo com sucesso!")
@@ -247,7 +242,7 @@ elif pagina == "Consultar Registros":
     with st.expander("🎛️ Filtros de Busca", expanded=True):
         fc1, fc2, fc3, fc4, fc5 = st.columns([2, 2, 1, 1, 1])
         with fc1:
-            f_tec = st.text_input("👤 Técnico", placeholder="Parte do nome...")
+            f_tec = st.selectbox("👤 Técnico", ["Todos"] + TECNICOS)
         with fc2:
             f_loc = st.text_input("📍 Local", placeholder="Parte do local...")
         with fc3:
@@ -258,7 +253,7 @@ elif pagina == "Consultar Registros":
             f_fim = st.date_input("📅 Até", value=date.today(),     key="cf", format="DD/MM/YYYY")
 
     registros = buscar_registros(
-        tecnico=f_tec or None,
+        tecnico=f_tec if f_tec != "Todos" else None,
         tipo=f_tipo,
         local=f_loc or None,
         data_ini=f_ini,
@@ -319,6 +314,7 @@ elif pagina == "Consultar Registros":
                 m5.metric("Defeitos", n_def)
 
                 st.markdown(f"**📍 Local:** {reg['local']}")
+                st.markdown(f"**🧰 Kits Usados:** {reg.get('kits_usados', 'N/A')}")
 
                 st.markdown("**📋 Checklist:**")
                 st.dataframe(
@@ -363,7 +359,7 @@ elif pagina == "Equipamentos Defeituosos":
     with st.expander("🎛️ Filtros", expanded=True):
         d1, d2, d3, d4 = st.columns([2, 1, 1, 2])
         with d1:
-            d_tec = st.text_input("👤 Técnico", key="dtec")
+            d_tec = st.selectbox("👤 Técnico", ["Todos"] + TECNICOS, key="dtec")
         with d2:
             d_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="dini", format="DD/MM/YYYY")
         with d3:
@@ -373,7 +369,7 @@ elif pagina == "Equipamentos Defeituosos":
 
     defeituosos = buscar_defeituosos(
         data_ini=d_ini, data_fim=d_fim,
-        tecnico=d_tec or None,
+        tecnico=d_tec if d_tec != "Todos" else None,
         equipamento=d_eq,
     )
 
@@ -389,6 +385,7 @@ elif pagina == "Equipamentos Defeituosos":
             "local":        "Local",
             "tecnico":      "Técnico",
             "qtd_kits":     "Kits",
+            "kits_usados":  "Kits Usados",
             "equipamento":  "Equipamento",
             "kit_defeito":  "Nº Kit",
             "obs_item":     "Descrição do Defeito",

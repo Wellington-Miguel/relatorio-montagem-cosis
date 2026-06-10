@@ -73,6 +73,7 @@ def init_db():
             tipo        TEXT    NOT NULL CHECK (tipo IN ('Montagem','Desmontagem')),
             local       TEXT    NOT NULL,
             qtd_kits    INTEGER NOT NULL CHECK (qtd_kits >= 1),
+            kits_usados TEXT    NOT NULL DEFAULT '',
             data_evento DATE    NOT NULL,
             observacoes TEXT    NOT NULL DEFAULT '',
             criado_em   TIMESTAMP NOT NULL DEFAULT NOW()
@@ -89,6 +90,7 @@ def init_db():
             obs_item      TEXT    NOT NULL DEFAULT ''
         )
     """)
+    _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS kits_usados TEXT NOT NULL DEFAULT '';")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_data    ON registros(data_evento)")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_tec     ON registros(tecnico)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_def   ON itens(defeituoso)")
@@ -97,14 +99,14 @@ def init_db():
 
 # ── Escrita ───────────────────────────────────────────────────────────────────
 
-def salvar_registro(tecnico, tipo, local, qtd_kits, data_evento, observacoes, itens) -> int:
+def salvar_registro(tecnico, tipo, local, qtd_kits, kits_usados, data_evento, observacoes, itens) -> int:
     conn = _pool()
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO registros (tecnico, tipo, local, qtd_kits, data_evento, observacoes)
-                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                (tecnico, tipo, local, int(qtd_kits), str(data_evento), observacoes or ""),
+                """INSERT INTO registros (tecnico, tipo, local, qtd_kits, kits_usados, data_evento, observacoes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (tecnico, tipo, local, int(qtd_kits), kits_usados, str(data_evento), observacoes or ""),
             )
             rid = cur.fetchone()["id"]
 
@@ -185,6 +187,7 @@ def buscar_defeituosos(data_ini=None, data_fim=None,
                r.local,
                r.tecnico,
                r.qtd_kits,
+               r.kits_usados,
                i.equipamento,
                i.kit_defeito,
                i.obs_item
@@ -282,7 +285,7 @@ def operacoes_por_tecnico() -> pd.DataFrame:
 def ultimos_registros(n: int = 10) -> pd.DataFrame:
     rows = _exec(f"""
         SELECT id AS "ID", data_evento::text AS "Data", tipo AS "Tipo",
-               local AS "Local", tecnico AS "Técnico", qtd_kits AS "Kits"
+               local AS "Local", tecnico AS "Técnico", qtd_kits AS "Kits", kits_usados AS "Kits Usados"
         FROM registros ORDER BY id DESC LIMIT {int(n)}
     """, fetch="all") or []
     return pd.DataFrame(rows)
