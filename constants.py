@@ -4,7 +4,10 @@ Equipamentos do kit biométrico e outras constantes compartilhadas.
 """
 
 EQUIPAMENTOS = [
-    "Scanner + Fonte + USB",
+    "Scanner",
+    "Fonte do Scanner",
+    "USB do Scanner",
+    "Tampa/Guia do Scanner",
     "Notebook",
     "Ring Light",
     "Suporte Ring Light",
