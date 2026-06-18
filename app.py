@@ -12,7 +12,7 @@ from constants import (
     APP_TITLE, APP_ICON, APP_DESC, VERSION,
 )
 from database import (
-    init_db, salvar_registro, deletar_registro,
+    init_db, salvar_registro, deletar_registro, atualizar_registro, buscar_um_registro,
     buscar_registros, buscar_itens, buscar_defeituosos,
     listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
@@ -41,14 +41,21 @@ st.caption(f"{APP_DESC}  ·  v{VERSION}")
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📂 Menu")
+    paginas_visiveis = [
+        "Novo Registro",
+        "Consultar Registros",
+        "Equipamentos Defeituosos",
+        "Dashboard",
+    ]
+    # A página de edição é oculta e acessada via query param
+    if "page" in st.query_params and st.query_params["page"] == "Editar":
+        pagina_selecionada = "Editar Registro"
+    else:
+        pagina_selecionada = st.radio("Navegação", paginas_visiveis, label_visibility="collapsed")
+
     pagina = st.radio(
-        "Navegação",
-        [
-            "Novo Registro",
-            "Consultar Registros",
-            "Equipamentos Defeituosos",
-            "Dashboard",
-        ],
+        "Navegação", paginas_visiveis + ["Editar Registro"],
+        key="nav_hidden", index=paginas_visiveis.index(pagina_selecionada) if pagina_selecionada in paginas_visiveis else 0,
         label_visibility="collapsed",
     )
     st.markdown("---")
@@ -68,7 +75,7 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 1 — NOVO REGISTRO
 # ════════════════════════════════════════════════════════════════════════════
-if pagina == "Novo Registro":
+if pagina == "Novo Registro" and ("page" not in st.query_params):
 
     st.subheader("📋 Registrar Montagem / Desmontagem")
 
@@ -304,14 +311,14 @@ elif pagina == "Consultar Registros":
                 f"Técnico: {reg['tecnico']} · Kits: {reg['qtd_kits']}"
             ):
                 st.markdown(f"**Status:** {badges}", unsafe_allow_html=True)
-                st.markdown("")
 
-                m1, m2, m3, m4, m5 = st.columns(5)
+                m1, m2, m3, m4, m5, m6 = st.columns(6)
                 m1.metric("Técnico",  reg["tecnico"])
                 m2.metric("Tipo",     reg["tipo"])
                 m3.metric("Kits",     reg["qtd_kits"])
                 m4.metric("Data",     formatar_data(reg["data_evento"]))
                 m5.metric("Defeitos", n_def)
+                m6.metric("Ausentes", n_aus)
 
                 st.markdown(f"**📍 Local:** {reg['local']}")
                 st.markdown(f"**🧰 Kits Usados:** {reg.get('kits_usados', 'N/A')}")
@@ -326,9 +333,15 @@ elif pagina == "Consultar Registros":
                 if reg["observacoes"]:
                     st.info(f"📝 **Observações:** {reg['observacoes']}")
 
-                st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}")
+                data_modificacao = f" | Editado em: {formatar_data(reg['atualizado_em'])}" if reg.get('atualizado_em') else ""
+                st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}{data_modificacao}")
 
-                btn1, btn2, btn3 = st.columns([1, 1.5, 4])
+                btn1, btn2, btn3, btn4 = st.columns([1, 1.5, 1.5, 4])
+                with btn1:
+                    if st.button("✏️ Editar", key=f"edit_{reg['id']}", use_container_width=True):
+                        st.query_params["page"] = "Editar"
+                        st.query_params["id"] = reg["id"]
+                        st.rerun()
                 with btn1:
                     with st.popover("🗑️ Excluir"):
                         st.warning("⚠️ **Atenção:** Esta ação é irreversível e apagará todos os itens vinculados a este registro.")
@@ -423,7 +436,7 @@ elif pagina == "Equipamentos Defeituosos":
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 4 — DASHBOARD
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "Dashboard":
+elif pagina == "Dashboard" and ("page" not in st.query_params):
 
     st.subheader("📊 Dashboard Geral")
 

@@ -76,6 +76,7 @@ def init_db():
             kits_usados TEXT    NOT NULL DEFAULT '',
             data_evento DATE    NOT NULL,
             observacoes TEXT    NOT NULL DEFAULT '',
+            atualizado_em TIMESTAMP,
             criado_em   TIMESTAMP NOT NULL DEFAULT NOW()
         )
     """)
@@ -132,12 +133,45 @@ def deletar_registro(rid: int):
     _exec("DELETE FROM registros WHERE id = %s", (rid,))
 
 
+def atualizar_registro(rid: int, tecnico, tipo, local, qtd_kits, kits_usados, data_evento, observacoes, itens) -> int:
+    conn = _pool()
+    try:
+        with conn.cursor() as cur:
+            # 1. Atualiza o registro principal
+            cur.execute(
+                """UPDATE registros
+                   SET tecnico = %s, tipo = %s, local = %s, qtd_kits = %s, kits_usados = %s,
+                       data_evento = %s, observacoes = %s, atualizado_em = NOW()
+                   WHERE id = %s""",
+                (tecnico, tipo, local, int(qtd_kits), kits_usados, str(data_evento), observacoes or "", rid),
+            )
+
+            # 2. Apaga os itens antigos
+            cur.execute("DELETE FROM itens WHERE registro_id = %s", (rid,))
+
+            # 3. Insere os itens atualizados
+            psycopg2.extras.execute_values(
+                cur,
+                """INSERT INTO itens
+                   (registro_id, equipamento, consta, defeituoso, kit_defeito, obs_item)
+                   VALUES %s""",
+                [
+                    (rid, i["equipamento"], bool(i["consta"]), bool(i["defeituoso"]),
+                     i.get("kit_defeito") or "", i.get("obs_item") or "")
+                    for i in itens
+                ],
+            )
+        conn.commit()
+        return rid
+    except Exception:
+        conn.rollback()
+        raise
+
 def atualizar_observacoes(rid: int, texto: str):
     _exec("UPDATE registros SET observacoes = %s WHERE id = %s", (texto, rid))
 
 
 # ── Leitura ───────────────────────────────────────────────────────────────────
-
 def buscar_registros(tecnico=None, tipo=None, local=None,
                      data_ini=None, data_fim=None) -> list[dict]:
     sql    = "SELECT * FROM registros WHERE TRUE"
@@ -162,8 +196,17 @@ def buscar_registros(tecnico=None, tipo=None, local=None,
     # Normaliza campos para string (compatibilidade com utils/app)
     for r in rows:
         r["data_evento"] = str(r["data_evento"])
+        r["atualizado_em"] = str(r["atualizado_em"]) if r.get("atualizado_em") else None
         r["criado_em"]   = str(r["criado_em"])
     return rows
+
+
+def buscar_um_registro(rid: int) -> dict | None:
+    """Busca um único registro pelo seu ID."""
+    row = _exec("SELECT * FROM registros WHERE id = %s", (rid,), fetch="one")
+    if row:
+        row["data_evento"] = datetime.strptime(str(row["data_evento"]), "%Y-%m-%d").date()
+    return row
 
 
 def buscar_itens(registro_id: int) -> list[dict]:
