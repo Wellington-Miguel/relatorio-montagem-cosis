@@ -38,6 +38,41 @@ st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(f"<h1>{APP_ICON} <span>{APP_TITLE}</span></h1>", unsafe_allow_html=True)
 st.caption(f"{APP_DESC}  ·  v{VERSION}")
 
+# -----------------------------------------------------------------------------
+# SUB-PÁGINA DE EDIÇÃO (dentro de Consultar Registros)
+# -----------------------------------------------------------------------------
+def pagina_edicao(reg_id: int):
+    """Renderiza o formulário de edição para um registro específico."""
+    st.subheader(f"✏️ Editando Registro #{reg_id}")
+
+    reg_edit = buscar_registro_por_id(reg_id)
+    if not reg_edit:
+        st.error("Registro não encontrado. Ele pode ter sido excluído.")
+        if st.button("Voltar para a consulta"):
+            del st.session_state.edit_id
+            st.rerun()
+        return
+
+    with st.form(key=f"edit_form_{reg_id}"):
+        st.markdown("#### Dados do Registro")
+        edit_tecnico = st.text_input("Técnico", value=reg_edit['tecnico'])
+        edit_tipo = st.radio("Tipo", ["Montagem", "Desmontagem"], index=["Montagem", "Desmontagem"].index(reg_edit['tipo']))
+        edit_local = st.text_input("Local", value=reg_edit['local'])
+        edit_qtd_kits = st.number_input("Qtd. de Kits", min_value=1, value=reg_edit['qtd_kits'])
+        edit_data = st.date_input("Data", value=datetime.strptime(reg_edit['data_evento'], "%Y-%m-%d").date(), format="DD/MM/YYYY")
+        edit_obs = st.text_area("Observações", value=reg_edit['observacoes'], height=120)
+
+        btn_salvar, btn_cancelar = st.columns([1.5, 1])
+        if btn_salvar.form_submit_button("💾 Salvar Alterações", type="primary", use_container_width=True):
+            from database import atualizar_registro
+            atualizar_registro(reg_id, edit_tecnico, edit_tipo, edit_local, edit_qtd_kits, edit_data, edit_obs)
+            st.success(f"Registro #{reg_id} atualizado com sucesso!")
+            del st.session_state.edit_id
+            st.rerun()
+        if btn_cancelar.form_submit_button("✖️ Cancelar Edição", use_container_width=True):
+            del st.session_state.edit_id
+            st.rerun()
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📂 Menu")
@@ -236,41 +271,6 @@ if pagina == "Novo Registro":
                 if k.startswith(("consta_", "def_", "kitdef_", "obs_", "check_")):
                     del st.session_state[k]
 
-
-# -----------------------------------------------------------------------------
-# SUB-PÁGINA DE EDIÇÃO (dentro de Consultar Registros)
-# -----------------------------------------------------------------------------
-def pagina_edicao(reg_id: int):
-    """Renderiza o formulário de edição para um registro específico."""
-    st.subheader(f"✏️ Editando Registro #{reg_id}")
-
-    reg_edit = buscar_registro_por_id(reg_id)
-    if not reg_edit:
-        st.error("Registro não encontrado. Ele pode ter sido excluído.")
-        if st.button("Voltar para a consulta"):
-            del st.session_state.edit_id
-            st.rerun()
-        return
-
-    with st.form(key=f"edit_form_{reg_id}"):
-        st.markdown("#### Dados do Registro")
-        edit_tecnico = st.text_input("Técnico", value=reg_edit['tecnico'])
-        edit_tipo = st.radio("Tipo", ["Montagem", "Desmontagem"], index=["Montagem", "Desmontagem"].index(reg_edit['tipo']))
-        edit_local = st.text_input("Local", value=reg_edit['local'])
-        edit_qtd_kits = st.number_input("Qtd. de Kits", min_value=1, value=reg_edit['qtd_kits'])
-        edit_data = st.date_input("Data", value=datetime.strptime(reg_edit['data_evento'], "%Y-%m-%d").date(), format="DD/MM/YYYY")
-        edit_obs = st.text_area("Observações", value=reg_edit['observacoes'], height=120)
-
-        btn_salvar, btn_cancelar = st.columns([1.5, 1])
-        if btn_salvar.form_submit_button("💾 Salvar Alterações", type="primary", use_container_width=True):
-            from database import atualizar_registro
-            atualizar_registro(reg_id, edit_tecnico, edit_tipo, edit_local, edit_qtd_kits, edit_data, edit_obs)
-            st.success(f"Registro #{reg_id} atualizado com sucesso!")
-            del st.session_state.edit_id
-            st.rerun()
-        if btn_cancelar.form_submit_button("✖️ Cancelar Edição", use_container_width=True):
-            del st.session_state.edit_id
-            st.rerun()
 
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 2 — CONSULTAR REGISTROS
