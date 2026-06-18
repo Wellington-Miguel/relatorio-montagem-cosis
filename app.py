@@ -315,18 +315,23 @@ elif pagina == "Consultar Registros":
 
                 st.markdown("---")
 
-                # ── Checklist recolhível (detalhe secundário) ─────────────────
-                with st.expander("📋 Ver Checklist Completo de Itens"):
+                # ── Detalhes secundários em abas (evita expanders aninhados) ──
+                audit = buscar_audit_log(reg["id"])
+                tab_labels = ["📋 Checklist"]
+                if audit:
+                    tab_labels.append(f"🕵️ Histórico ({len(audit)})")
+
+                tabs = st.tabs(tab_labels)
+
+                with tabs[0]:
                     st.dataframe(
                         itens_para_df_exibicao(itens),
                         use_container_width=True,
                         hide_index=True,
                     )
 
-                # ── Histórico de auditoria recolhível ─────────────────────────
-                audit = buscar_audit_log(reg["id"])
                 if audit:
-                    with st.expander(f"🕵️ Histórico de Alterações ({len(audit)} entrada(s))"):
+                    with tabs[1]:
                         for entrada in audit:
                             dt_brt = entrada.get("alterado_em_brt")
                             ts_str = (dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)"
