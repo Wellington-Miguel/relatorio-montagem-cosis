@@ -147,13 +147,13 @@ def buscar_registros(tecnico=None, tipo=None, local=None,
                      data_ini=None, data_fim=None) -> list[dict]:
     sql    = "SELECT * FROM registros WHERE TRUE"
     params = []
-    if tecnico:
+    if tecnico and tecnico.strip():
         sql += " AND LOWER(tecnico) LIKE %s"
         params.append(f"%{tecnico.lower()}%")
     if tipo and tipo != "Todos":
         sql += " AND tipo = %s"
         params.append(tipo)
-    if local:
+    if local and local.strip():
         sql += " AND LOWER(local) LIKE %s"
         params.append(f"%{local.lower()}%")
     if data_ini:
