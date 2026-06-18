@@ -13,10 +13,10 @@ from constants import (
 )
 from database import (
     init_db, salvar_registro, deletar_registro,
-    buscar_registros, buscar_registro_por_id, buscar_itens, buscar_defeituosos,
+    buscar_registros, buscar_registro_por_id, buscar_itens, buscar_historico, buscar_defeituosos,
     listar_tecnicos, listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
-    operacoes_por_tecnico, ultimos_registros,
+    operacoes_por_tecnico, ultimos_registros, atualizar_registro_completo
 )
 from utils import (
     registros_para_dataframe, to_csv_bytes, to_excel_bytes,
@@ -54,21 +54,52 @@ def pagina_edicao(reg_id: int):
         return
 
     with st.form(key=f"edit_form_{reg_id}"):
-        st.markdown("#### Dados do Registro")
+        st.markdown("### 1. Dados Gerais")
         edit_tecnico = st.text_input("Técnico", value=reg_edit['tecnico'])
         edit_tipo = st.radio("Tipo", ["Montagem", "Desmontagem"], index=["Montagem", "Desmontagem"].index(reg_edit['tipo']))
         edit_local = st.text_input("Local", value=reg_edit['local'])
         edit_qtd_kits = st.number_input("Qtd. de Kits", min_value=1, value=reg_edit['qtd_kits'])
         edit_data = st.date_input("Data", value=datetime.strptime(reg_edit['data_evento'], "%Y-%m-%d").date(), format="DD/MM/YYYY")
-        edit_obs = st.text_area("Observações", value=reg_edit['observacoes'], height=120)
+
+        st.markdown("---")
+        st.markdown(f"### 2. Checklist de Equipamentos — {formatar_tipo(edit_tipo)}")
+
+        itens_atuais = {i['equipamento']: i for i in buscar_itens(reg_id)}
+        itens_form = []
+        for eq in EQUIPAMENTOS:
+            item_atual = itens_atuais.get(eq, {})
+            with st.container(border=True):
+                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
+                c1.markdown(f"**{eq}**")
+                consta = c2.checkbox("Consta", value=bool(item_atual.get('consta', True)), key=f"consta_{reg_id}_{eq}")
+                defeituoso = c3.checkbox("Defeito", value=bool(item_atual.get('defeituoso', False)), key=f"def_{reg_id}_{eq}")
+                kit_def = obs_item = ""
+                if defeituoso:
+                    kit_def = c4.text_input("Nº Kit", value=item_atual.get('kit_defeito', ''), key=f"kitdef_{reg_id}_{eq}", placeholder="Ex: 03")
+                    obs_item = c5.text_input("Descrição do defeito", value=item_atual.get('obs_item', ''), key=f"obs_{reg_id}_{eq}", placeholder="Descreva brevemente...")
+
+            itens_form.append({
+                "equipamento": eq, "consta": consta, "defeituoso": defeituoso,
+                "kit_defeito": kit_def, "obs_item": obs_item,
+            })
+
+        st.markdown("---")
+        st.markdown("### 3. Observações Gerais")
+        edit_obs = st.text_area("Observações", value=reg_edit['observacoes'], height=120, label_visibility="collapsed")
+
+        st.markdown("---")
+        st.markdown("### 4. Justificativa da Alteração")
+        justificativa = st.text_input("Descreva o motivo da edição (obrigatório)", placeholder="Ex: Correção do nome do técnico e adição de item faltante.")
 
         btn_salvar, btn_cancelar = st.columns([1.5, 1])
         if btn_salvar.form_submit_button("💾 Salvar Alterações", type="primary", use_container_width=True):
-            from database import atualizar_registro
-            atualizar_registro(reg_id, edit_tecnico, edit_tipo, edit_local, edit_qtd_kits, edit_data, edit_obs)
-            st.success(f"Registro #{reg_id} atualizado com sucesso!")
-            del st.session_state.edit_id
-            st.rerun()
+            if not justificativa.strip():
+                st.error("⛔ A justificativa da alteração é obrigatória.")
+            else:
+                atualizar_registro_completo(reg_id, edit_tecnico, edit_tipo, edit_local, edit_qtd_kits, edit_data, edit_obs, itens_form, justificativa)
+                st.success(f"Registro #{reg_id} atualizado com sucesso!")
+                del st.session_state.edit_id
+                st.rerun()
         if btn_cancelar.form_submit_button("✖️ Cancelar Edição", use_container_width=True):
             del st.session_state.edit_id
             st.rerun()
@@ -328,6 +359,14 @@ elif pagina == "Consultar Registros":
                         st.info(f"📝 **Observações:** {reg['observacoes']}")
 
                     st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}")
+
+                    # Histórico de Alterações
+                    historico = buscar_historico(reg['id'])
+                    if historico:
+                        with st.expander("⏳ Ver Histórico de Alterações"):
+                            for h in historico:
+                                data_hora = formatar_data(str(h['alterado_em']))
+                                st.info(f"**Em {data_hora}:** {h['justificativa']}", icon="ℹ️")
 
                     btn1, btn2, btn3, btn4 = st.columns([1, 1, 1.5, 4])
                     if btn1.button("✏️ Editar", key=f"edit_{reg['id']}", use_container_width=True):

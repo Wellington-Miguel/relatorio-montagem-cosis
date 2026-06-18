@@ -93,6 +93,15 @@ def init_db():
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_tec     ON registros(tecnico)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_def   ON itens(defeituoso)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_regid ON itens(registro_id)")
+    _exec("""
+        CREATE TABLE IF NOT EXISTS historico_alteracoes (
+            id            SERIAL PRIMARY KEY,
+            registro_id   INTEGER NOT NULL REFERENCES registros(id) ON DELETE CASCADE,
+            alterado_em   TIMESTAMP NOT NULL DEFAULT NOW(),
+            justificativa TEXT NOT NULL
+        )
+    """)
+    _exec("CREATE INDEX IF NOT EXISTS idx_hist_regid ON historico_alteracoes(registro_id)")
 
 
 # ── Escrita ───────────────────────────────────────────────────────────────────
@@ -130,15 +139,41 @@ def deletar_registro(rid: int):
     _exec("DELETE FROM registros WHERE id = %s", (rid,))
 
 
-def atualizar_registro(rid, tecnico, tipo, local, qtd_kits, data_evento, observacoes):
-    """Atualiza um registro existente."""
-    _exec(
-        """UPDATE registros
-           SET tecnico=%s, tipo=%s, local=%s, qtd_kits=%s, data_evento=%s, observacoes=%s
-           WHERE id=%s""",
-        (tecnico, tipo, local, int(qtd_kits), str(data_evento), observacoes or "", rid)
-    )
-
+def atualizar_registro_completo(rid, tecnico, tipo, local, qtd_kits, data_evento, observacoes, itens, justificativa):
+    """Atualiza um registro, seus itens e registra a alteração no histórico."""
+    conn = _pool()
+    try:
+        with conn.cursor() as cur:
+            # 1. Atualiza o registro principal
+            cur.execute(
+                """UPDATE registros
+                   SET tecnico=%s, tipo=%s, local=%s, qtd_kits=%s, data_evento=%s, observacoes=%s
+                   WHERE id=%s""",
+                (tecnico, tipo, local, int(qtd_kits), str(data_evento), observacoes or "", rid)
+            )
+            # 2. Deleta os itens antigos
+            cur.execute("DELETE FROM itens WHERE registro_id = %s", (rid,))
+            # 3. Insere os novos itens
+            psycopg2.extras.execute_values(
+                cur,
+                """INSERT INTO itens
+                   (registro_id, equipamento, consta, defeituoso, kit_defeito, obs_item)
+                   VALUES %s""",
+                [
+                    (rid, i["equipamento"], bool(i["consta"]), bool(i["defeituoso"]),
+                     i.get("kit_defeito") or "", i.get("obs_item") or "")
+                    for i in itens
+                ],
+            )
+            # 4. Registra no histórico
+            cur.execute(
+                "INSERT INTO historico_alteracoes (registro_id, justificativa) VALUES (%s, %s)",
+                (rid, justificativa)
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Leitura ───────────────────────────────────────────────────────────────────
@@ -191,6 +226,14 @@ def buscar_itens(registro_id: int) -> list[dict]:
         r["defeituoso"] = int(r["defeituoso"])
     return rows
 
+
+def buscar_historico(registro_id: int) -> list[dict]:
+    """Busca o histórico de alterações de um registro."""
+    rows = _exec(
+        "SELECT * FROM historico_alteracoes WHERE registro_id = %s ORDER BY alterado_em DESC",
+        (registro_id,), fetch="all"
+    ) or []
+    return rows
 
 def buscar_defeituosos(data_ini=None, data_fim=None,
                        tecnico=None, equipamento=None) -> list[dict]:
