@@ -92,6 +92,7 @@ def init_db():
         )
     """)
     _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS kits_usados TEXT NOT NULL DEFAULT '';")
+    _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP;")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_data    ON registros(data_evento)")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_tec     ON registros(tecnico)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_def   ON itens(defeituoso)")
