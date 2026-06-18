@@ -93,7 +93,7 @@ with st.sidebar:
     - Kits movimentados: **{stats['total_kits']}**
     """)
     st.markdown("---")
-    st.caption(f"☁️ Banco: Supabase (PostgreSQL) · Versão {VERSION}")
+    st.caption(f"☁️ Banco: Supabase (PostgreSQL) · Versão {VERSION} /n · by Wellington Miguel")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -285,8 +285,7 @@ elif pagina == "Consultar Registros":
                          else '<span class="badge-ok">Tudo OK</span>')
 
             # ── Expander com título compacto ──────────────────────────────────
-            expander_label = (
-                f"#{reg['id']} · {formatar_data(reg['data_evento'])} · "
+            expander_label = (               
                 f"{reg['tipo'].upper()} · {reg['local']} · "
                 f"Técnico: {reg['tecnico']} · Kits: {reg['qtd_kits']}"
             )
