@@ -32,7 +32,7 @@ TECNICOS = [
     "Glaucia Barbosa",
     "Beatriz Alves",
     "Wellington Miguel",
-    "João Vitor"
+    "João Vitor",
 ]
 
 VERIFICACOES_ADICIONAIS = [
