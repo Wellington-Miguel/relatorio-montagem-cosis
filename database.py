@@ -73,8 +73,10 @@ def init_db():
             tipo        TEXT    NOT NULL CHECK (tipo IN ('Montagem','Desmontagem')),
             local       TEXT    NOT NULL,
             qtd_kits    INTEGER NOT NULL CHECK (qtd_kits >= 1),
+            kits_usados TEXT    NOT NULL DEFAULT '',
             data_evento DATE    NOT NULL,
             observacoes TEXT    NOT NULL DEFAULT '',
+            atualizado_em TIMESTAMP,
             criado_em   TIMESTAMP NOT NULL DEFAULT NOW()
         )
     """)
@@ -89,31 +91,24 @@ def init_db():
             obs_item      TEXT    NOT NULL DEFAULT ''
         )
     """)
+    _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS kits_usados TEXT NOT NULL DEFAULT '';")
+    _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP;")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_data    ON registros(data_evento)")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_tec     ON registros(tecnico)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_def   ON itens(defeituoso)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_regid ON itens(registro_id)")
-    _exec("""
-        CREATE TABLE IF NOT EXISTS historico_alteracoes (
-            id            SERIAL PRIMARY KEY,
-            registro_id   INTEGER NOT NULL REFERENCES registros(id) ON DELETE CASCADE,
-            alterado_em   TIMESTAMP NOT NULL DEFAULT NOW(),
-            justificativa TEXT NOT NULL
-        )
-    """)
-    _exec("CREATE INDEX IF NOT EXISTS idx_hist_regid ON historico_alteracoes(registro_id)")
 
 
 # ── Escrita ───────────────────────────────────────────────────────────────────
 
-def salvar_registro(tecnico, tipo, local, qtd_kits, data_evento, observacoes, itens) -> int:
+def salvar_registro(tecnico, tipo, local, qtd_kits, kits_usados, data_evento, observacoes, itens) -> int:
     conn = _pool()
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO registros (tecnico, tipo, local, qtd_kits, data_evento, observacoes)
-                   VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-                (tecnico, tipo, local, int(qtd_kits), str(data_evento), observacoes or ""),
+                """INSERT INTO registros (tecnico, tipo, local, qtd_kits, kits_usados, data_evento, observacoes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+                (tecnico, tipo, local, int(qtd_kits), kits_usados, str(data_evento), observacoes or ""),
             )
             rid = cur.fetchone()["id"]
 
@@ -139,21 +134,23 @@ def deletar_registro(rid: int):
     _exec("DELETE FROM registros WHERE id = %s", (rid,))
 
 
-def atualizar_registro_completo(rid, tecnico, tipo, local, qtd_kits, data_evento, observacoes, itens, justificativa):
-    """Atualiza um registro, seus itens e registra a alteração no histórico."""
+def atualizar_registro(rid: int, tecnico, tipo, local, qtd_kits, kits_usados, data_evento, observacoes, itens) -> int:
     conn = _pool()
     try:
         with conn.cursor() as cur:
             # 1. Atualiza o registro principal
             cur.execute(
                 """UPDATE registros
-                   SET tecnico=%s, tipo=%s, local=%s, qtd_kits=%s, data_evento=%s, observacoes=%s
-                   WHERE id=%s""",
-                (tecnico, tipo, local, int(qtd_kits), str(data_evento), observacoes or "", rid)
+                   SET tecnico = %s, tipo = %s, local = %s, qtd_kits = %s, kits_usados = %s,
+                       data_evento = %s, observacoes = %s, atualizado_em = NOW()
+                   WHERE id = %s""",
+                (tecnico, tipo, local, int(qtd_kits), kits_usados, str(data_evento), observacoes or "", rid),
             )
-            # 2. Deleta os itens antigos
+
+            # 2. Apaga os itens antigos
             cur.execute("DELETE FROM itens WHERE registro_id = %s", (rid,))
-            # 3. Insere os novos itens
+
+            # 3. Insere os itens atualizados
             psycopg2.extras.execute_values(
                 cur,
                 """INSERT INTO itens
@@ -165,30 +162,28 @@ def atualizar_registro_completo(rid, tecnico, tipo, local, qtd_kits, data_evento
                     for i in itens
                 ],
             )
-            # 4. Registra no histórico
-            cur.execute(
-                "INSERT INTO historico_alteracoes (registro_id, justificativa) VALUES (%s, %s)",
-                (rid, justificativa)
-            )
         conn.commit()
+        return rid
     except Exception:
         conn.rollback()
         raise
 
+def atualizar_observacoes(rid: int, texto: str):
+    _exec("UPDATE registros SET observacoes = %s WHERE id = %s", (texto, rid))
+
 
 # ── Leitura ───────────────────────────────────────────────────────────────────
-
 def buscar_registros(tecnico=None, tipo=None, local=None,
                      data_ini=None, data_fim=None) -> list[dict]:
     sql    = "SELECT * FROM registros WHERE TRUE"
     params = []
-    if tecnico and tecnico.strip():
+    if tecnico:
         sql += " AND LOWER(tecnico) LIKE %s"
         params.append(f"%{tecnico.lower()}%")
     if tipo and tipo != "Todos":
         sql += " AND tipo = %s"
         params.append(tipo)
-    if local and local.strip():
+    if local:
         sql += " AND LOWER(local) LIKE %s"
         params.append(f"%{local.lower()}%")
     if data_ini:
@@ -202,16 +197,16 @@ def buscar_registros(tecnico=None, tipo=None, local=None,
     # Normaliza campos para string (compatibilidade com utils/app)
     for r in rows:
         r["data_evento"] = str(r["data_evento"])
+        r["atualizado_em"] = str(r["atualizado_em"]) if r.get("atualizado_em") else None
         r["criado_em"]   = str(r["criado_em"])
     return rows
 
 
-def buscar_registro_por_id(rid: int) -> dict | None:
+def buscar_um_registro(rid: int) -> dict | None:
     """Busca um único registro pelo seu ID."""
     row = _exec("SELECT * FROM registros WHERE id = %s", (rid,), fetch="one")
     if row:
-        row["data_evento"] = str(row["data_evento"])
-        row["criado_em"]   = str(row["criado_em"])
+        row["data_evento"] = datetime.strptime(str(row["data_evento"]), "%Y-%m-%d").date()
     return row
 
 
@@ -227,14 +222,6 @@ def buscar_itens(registro_id: int) -> list[dict]:
     return rows
 
 
-def buscar_historico(registro_id: int) -> list[dict]:
-    """Busca o histórico de alterações de um registro."""
-    rows = _exec(
-        "SELECT * FROM historico_alteracoes WHERE registro_id = %s ORDER BY alterado_em DESC",
-        (registro_id,), fetch="all"
-    ) or []
-    return rows
-
 def buscar_defeituosos(data_ini=None, data_fim=None,
                        tecnico=None, equipamento=None) -> list[dict]:
     sql = """
@@ -244,6 +231,7 @@ def buscar_defeituosos(data_ini=None, data_fim=None,
                r.local,
                r.tecnico,
                r.qtd_kits,
+               r.kits_usados,
                i.equipamento,
                i.kit_defeito,
                i.obs_item
@@ -341,7 +329,7 @@ def operacoes_por_tecnico() -> pd.DataFrame:
 def ultimos_registros(n: int = 10) -> pd.DataFrame:
     rows = _exec(f"""
         SELECT id AS "ID", data_evento::text AS "Data", tipo AS "Tipo",
-               local AS "Local", tecnico AS "Técnico", qtd_kits AS "Kits"
+               local AS "Local", tecnico AS "Técnico", qtd_kits AS "Kits", kits_usados AS "Kits Usados"
         FROM registros ORDER BY id DESC LIMIT {int(n)}
     """, fetch="all") or []
     return pd.DataFrame(rows)

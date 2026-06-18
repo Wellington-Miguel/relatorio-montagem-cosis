@@ -8,15 +8,15 @@ import pandas as pd
 from datetime import date, datetime
 
 from constants import (
-    EQUIPAMENTOS, VERIFICACOES_ADICIONAIS,
+    EQUIPAMENTOS, VERIFICACOES_ADICIONAIS, TECNICOS,
     APP_TITLE, APP_ICON, APP_DESC, VERSION,
 )
 from database import (
-    init_db, salvar_registro, deletar_registro,
-    buscar_registros, buscar_registro_por_id, buscar_itens, buscar_historico, buscar_defeituosos,
-    listar_tecnicos, listar_locais,
+    init_db, salvar_registro, deletar_registro, atualizar_registro, buscar_um_registro,
+    buscar_registros, buscar_itens, buscar_defeituosos,
+    listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
-    operacoes_por_tecnico, ultimos_registros, atualizar_registro_completo
+    operacoes_por_tecnico, ultimos_registros,
 )
 from utils import (
     registros_para_dataframe, to_csv_bytes, to_excel_bytes,
@@ -38,85 +38,24 @@ st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(f"<h1>{APP_ICON} <span>{APP_TITLE}</span></h1>", unsafe_allow_html=True)
 st.caption(f"{APP_DESC}  ·  v{VERSION}")
 
-# -----------------------------------------------------------------------------
-# SUB-PÁGINA DE EDIÇÃO (dentro de Consultar Registros)
-# -----------------------------------------------------------------------------
-def pagina_edicao(reg_id: int):
-    """Renderiza o formulário de edição para um registro específico."""
-    st.subheader(f"✏️ Editando Registro #{reg_id}")
-
-    reg_edit = buscar_registro_por_id(reg_id)
-    if not reg_edit:
-        st.error("Registro não encontrado. Ele pode ter sido excluído.")
-        if st.button("Voltar para a consulta"):
-            del st.session_state.edit_id
-            st.rerun()
-        return
-
-    with st.form(key=f"edit_form_{reg_id}"):
-        st.markdown("### 1. Dados Gerais")
-        edit_tecnico = st.text_input("Técnico", value=reg_edit['tecnico'])
-        edit_tipo = st.radio("Tipo", ["Montagem", "Desmontagem"], index=["Montagem", "Desmontagem"].index(reg_edit['tipo']))
-        edit_local = st.text_input("Local", value=reg_edit['local'])
-        edit_qtd_kits = st.number_input("Qtd. de Kits", min_value=1, value=reg_edit['qtd_kits'])
-        edit_data = st.date_input("Data", value=datetime.strptime(reg_edit['data_evento'], "%Y-%m-%d").date(), format="DD/MM/YYYY")
-
-        st.markdown("---")
-        st.markdown(f"### 2. Checklist de Equipamentos — {formatar_tipo(edit_tipo)}")
-
-        itens_atuais = {i['equipamento']: i for i in buscar_itens(reg_id)}
-        itens_form = []
-        for eq in EQUIPAMENTOS:
-            item_atual = itens_atuais.get(eq, {})
-            with st.container(border=True):
-                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
-                c1.markdown(f"**{eq}**")
-                consta = c2.checkbox("Consta", value=bool(item_atual.get('consta', True)), key=f"consta_{reg_id}_{eq}")
-                defeituoso = c3.checkbox("Defeito", value=bool(item_atual.get('defeituoso', False)), key=f"def_{reg_id}_{eq}")
-                kit_def = obs_item = ""
-                if defeituoso:
-                    kit_def = c4.text_input("Nº Kit", value=item_atual.get('kit_defeito', ''), key=f"kitdef_{reg_id}_{eq}", placeholder="Ex: 03")
-                    obs_item = c5.text_input("Descrição do defeito", value=item_atual.get('obs_item', ''), key=f"obs_{reg_id}_{eq}", placeholder="Descreva brevemente...")
-
-            itens_form.append({
-                "equipamento": eq, "consta": consta, "defeituoso": defeituoso,
-                "kit_defeito": kit_def, "obs_item": obs_item,
-            })
-
-        st.markdown("---")
-        st.markdown("### 3. Observações Gerais")
-        edit_obs = st.text_area("Observações", value=reg_edit['observacoes'], height=120, label_visibility="collapsed")
-
-        st.markdown("---")
-        st.markdown("### 4. Justificativa da Alteração")
-        justificativa = st.text_input("Descreva o motivo da edição (obrigatório)", placeholder="Ex: Correção do nome do técnico e adição de item faltante.")
-
-        btn_salvar, btn_cancelar = st.columns([1.5, 1])
-        if btn_salvar.form_submit_button("💾 Salvar Alterações", type="primary", use_container_width=True):
-            if not justificativa.strip():
-                st.error("⛔ A justificativa da alteração é obrigatória.")
-            else:
-                atualizar_registro_completo(reg_id, edit_tecnico, edit_tipo, edit_local, edit_qtd_kits, edit_data, edit_obs, itens_form, justificativa)
-                st.success(f"Registro #{reg_id} atualizado com sucesso!")
-                del st.session_state.edit_id
-                st.rerun()
-        if btn_cancelar.form_submit_button("✖️ Cancelar Edição", use_container_width=True):
-            del st.session_state.edit_id
-            st.rerun()
-
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📂 Menu")
-    pagina = st.radio(
-        "Navegação",
-        [
-            "Novo Registro",
-            "Consultar Registros",
-            "Equipamentos Defeituosos",
-            "Dashboard",
-        ],
-        label_visibility="collapsed",
-    )
+    paginas_visiveis = [
+        "Novo Registro",
+        "Consultar Registros",
+        "Equipamentos Defeituosos",
+        "Dashboard",
+    ]
+    # A página de edição é oculta e acessada via query param
+    if "page" in st.query_params and st.query_params["page"] == "Editar":
+        st.info("✏️ Modo de Edição Ativo")
+        if st.button("⬅️ Voltar"):
+            st.query_params.clear()
+            st.rerun()
+        pagina = "Editar Registro"
+    else:
+        pagina = st.radio("Navegação", paginas_visiveis, label_visibility="collapsed")
     st.markdown("---")
     stats = stats_gerais()
     st.markdown(f"""
@@ -134,7 +73,7 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 1 — NOVO REGISTRO
 # ════════════════════════════════════════════════════════════════════════════
-if pagina == "Novo Registro":
+if pagina == "Novo Registro" and ("page" not in st.query_params):
 
     st.subheader("📋 Registrar Montagem / Desmontagem")
 
@@ -156,22 +95,9 @@ if pagina == "Novo Registro":
 
     # ── Dados gerais ─────────────────────────────────────────────────────────
     st.markdown("### 1. Dados Gerais")
-    col1, col2, col3 = st.columns([3, 1, 1])
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
     with col1:
-        tec_list = [""] + listar_tecnicos()
-        tec_novo = st.text_input(
-            "👤 Técnico Responsável *",
-            placeholder="Digite o nome ou escolha abaixo",
-        )
-        if len(tec_list) > 1:
-            tec_sel = st.selectbox(
-                "Ou selecione um técnico já cadastrado:",
-                tec_list,
-                label_visibility="collapsed",
-            )
-            tecnico = tec_novo.strip() or tec_sel
-        else:
-            tecnico = tec_novo.strip()
+        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS)
 
     with col2:
         tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], horizontal=False)
@@ -180,9 +106,15 @@ if pagina == "Novo Registro":
         qtd_kits = st.number_input(
             "📦 Qtd. de Kits *", min_value=1, max_value=99, value=1, step=1
         )
-
-    col4, col5 = st.columns([3, 1])
+        
     with col4:
+        kits_usados = st.text_input(
+            "🧰 Kits Usados *",
+            placeholder="Ex: Kit 01, Kit 03",
+        )
+
+    col_loc, col_dt = st.columns([3, 1])
+    with col_loc:
         loc_list = [""] + listar_locais()
         loc_novo = st.text_input(
             "📍 Local *",
@@ -198,7 +130,7 @@ if pagina == "Novo Registro":
         else:
             local = loc_novo.strip()
 
-    with col5:
+    with col_dt:
         data_evento = st.date_input("📅 Data *", value=date.today(), format="DD/MM/YYYY")
 
     st.markdown("---")
@@ -272,6 +204,8 @@ if pagina == "Novo Registro":
         erros = []
         if not tecnico:
             erros.append("⛔ Nome do técnico é obrigatório.")
+        if not kits_usados.strip():
+            erros.append("⛔ O preenchimento dos kits usados é obrigatório.")
         if not local:
             erros.append("⛔ Local é obrigatório.")
         if erros:
@@ -280,7 +214,7 @@ if pagina == "Novo Registro":
         else:
             with st.spinner("Salvando..."):
                 rid = salvar_registro(
-                    tecnico, tipo, local, qtd_kits,
+                    tecnico, tipo, local, qtd_kits, kits_usados.strip(),
                     data_evento, observacoes, itens_form,
                 )
             st.success(f"✅ Registro **#{rid}** salvo com sucesso!")
@@ -310,80 +244,242 @@ elif pagina == "Consultar Registros":
 
     st.subheader("🔍 Consultar Registros")
 
-    # Se um ID de edição estiver na sessão, mostra a página de edição
-    if st.session_state.get("edit_id"):
-        pagina_edicao(st.session_state.edit_id)
-    # Caso contrário, mostra a lista de registros
-    else:
-        with st.expander("🎛️ Filtros de Busca", expanded=True):
-            fc1, fc2, fc3, fc4, fc5 = st.columns([2, 2, 1, 1, 1])
-            with fc1: f_tec = st.text_input("👤 Técnico", placeholder="Parte do nome...")
-            with fc2: f_loc = st.text_input("📍 Local", placeholder="Parte do local...")
-            with fc3: f_tipo = st.selectbox("Tipo", ["Todos", "Montagem", "Desmontagem"])
-            with fc4: f_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="ci", format="DD/MM/YYYY")
-            with fc5: f_fim = st.date_input("📅 Até", value=date.today(),     key="cf", format="DD/MM/YYYY")
+    with st.expander("🎛️ Filtros de Busca", expanded=True):
+        fc1, fc2, fc3, fc4, fc5 = st.columns([2, 2, 1, 1, 1])
+        with fc1:
+            f_tec = st.selectbox("👤 Técnico", ["Todos"] + TECNICOS)
+        with fc2:
+            f_loc = st.text_input("📍 Local", placeholder="Parte do local...")
+        with fc3:
+            f_tipo = st.selectbox("Tipo", ["Todos", "Montagem", "Desmontagem"])
+        with fc4:
+            f_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="ci", format="DD/MM/YYYY")
+        with fc5:
+            f_fim = st.date_input("📅 Até", value=date.today(),     key="cf", format="DD/MM/YYYY")
 
-        registros = buscar_registros(tecnico=f_tec, tipo=f_tipo, local=f_loc, data_ini=f_ini, data_fim=f_fim)
+    registros = buscar_registros(
+        tecnico=f_tec if f_tec != "Todos" else None,
+        tipo=f_tipo,
+        local=f_loc or None,
+        data_ini=f_ini,
+        data_fim=f_fim,
+    )
 
-        col_tot, col_exp_all = st.columns([3, 1])
-        col_tot.markdown(f"**{len(registros)} registro(s) encontrado(s)**")
+    col_tot, col_exp_all = st.columns([3, 1])
+    col_tot.markdown(f"**{len(registros)} registro(s) encontrado(s)**")
 
-        if registros:
-            with col_exp_all:
-                df_all = registros_para_dataframe(registros)
-                exp_fmt = st.selectbox("Formato", ["CSV", "Excel"], key="fmt_all", label_visibility="collapsed")
-                btn_label = "⬇️ Exportar todos"
-                if exp_fmt == "CSV":
-                    st.download_button(btn_label, to_csv_bytes(df_all), f"relatorio_{date.today()}.csv", "text/csv", use_container_width=True)
-                else:
-                    st.download_button(btn_label, to_excel_bytes(df_all), f"relatorio_{date.today()}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    if registros:
+        # Exportação em lote
+        with col_exp_all:
+            df_all = registros_para_dataframe(registros)
+            exp_fmt = st.selectbox("Formato", ["CSV", "Excel"], key="fmt_all",
+                                   label_visibility="collapsed")
 
-            st.markdown("---")
+        col_a, col_b = st.columns([1, 4])
+        with col_a:
+            if exp_fmt == "CSV":
+                st.download_button(
+                    "⬇️ Exportar todos",
+                    data=to_csv_bytes(df_all),
+                    file_name=f"relatorio_{date.today()}.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.download_button(
+                    "⬇️ Exportar todos",
+                    data=to_excel_bytes(df_all),
+                    file_name=f"relatorio_{date.today()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
-            for reg in registros:
-                itens = buscar_itens(reg["id"])
-                n_def = sum(1 for i in itens if i["defeituoso"])
-                n_aus = sum(1 for i in itens if not i["consta"])
-                badge_def = f'<span class="badge-err">{n_def} defeito(s)</span>&nbsp;' if n_def else ""
-                badge_aus = f'<span class="badge-warn">{n_aus} ausente(s)</span>' if n_aus else ""
-                badges = f"{badge_def}{badge_aus}".strip() or '<span class="badge-ok">Tudo OK</span>'
+        st.markdown("---")
 
-                with st.expander(f"#{reg['id']} · {formatar_data(reg['data_evento'])} · {reg['tipo'].upper()} · {reg['local']}"):
-                    st.markdown(f"**Status:** {badges}", unsafe_allow_html=True)
-                    st.markdown(f"**Técnico:** {reg['tecnico']} · **Kits:** {reg['qtd_kits']}")
+        for reg in registros:
+            itens = buscar_itens(reg["id"])
+            n_def = sum(1 for i in itens if i["defeituoso"])
+            n_aus = sum(1 for i in itens if not i["consta"])
 
-                    st.markdown("**📋 Checklist:**")
-                    st.dataframe(itens_para_df_exibicao(itens), use_container_width=True, hide_index=True)
+            badge_def = f'<span class="badge-err">{n_def} defeito(s)</span>&nbsp;' if n_def else ""
+            badge_aus = f'<span class="badge-warn">{n_aus} ausente(s)</span>' if n_aus else ""
+            badges    = f"{badge_def}{badge_aus}".strip() if (badge_def or badge_aus) else '<span class="badge-ok">Tudo OK</span>'
 
-                    if reg["observacoes"]:
-                        st.info(f"📝 **Observações:** {reg['observacoes']}")
+            with st.expander(
+                f"#{reg['id']} · {formatar_data(reg['data_evento'])} · "
+                f"{reg['tipo'].upper()} · {reg['local']} · "
+                f"Técnico: {reg['tecnico']} · Kits: {reg['qtd_kits']}"
+            ):
+                st.markdown(f"**Status:** {badges}", unsafe_allow_html=True)
 
-                    st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}")
+                m1, m2, m3, m4, m5, m6 = st.columns(6)
+                m1.metric("Técnico",  reg["tecnico"])
+                m2.metric("Tipo",     reg["tipo"])
+                m3.metric("Kits",     reg["qtd_kits"])
+                m4.metric("Data",     formatar_data(reg["data_evento"]))
+                m5.metric("Defeitos", n_def)
+                m6.metric("Ausentes", n_aus)
 
-                    # Histórico de Alterações
-                    historico = buscar_historico(reg['id'])
-                    if historico:
-                        with st.expander("⏳ Ver Histórico de Alterações"):
-                            for h in historico:
-                                data_hora = formatar_data(str(h['alterado_em']))
-                                st.info(f"**Em {data_hora}:** {h['justificativa']}", icon="ℹ️")
+                st.markdown(f"**📍 Local:** {reg['local']}")
+                st.markdown(f"**🧰 Kits Usados:** {reg.get('kits_usados', 'N/A')}")
 
-                    btn1, btn2, btn3, btn4 = st.columns([1, 1, 1.5, 4])
-                    if btn1.button("✏️ Editar", key=f"edit_{reg['id']}", use_container_width=True):
-                        st.session_state.edit_id = reg['id']
+                st.markdown("**📋 Checklist:**")
+                st.dataframe(
+                    itens_para_df_exibicao(itens),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                if reg["observacoes"]:
+                    st.info(f"📝 **Observações:** {reg['observacoes']}")
+
+                data_modificacao = f" | Editado em: {formatar_data(reg['atualizado_em'])}" if reg.get('atualizado_em') else ""
+                st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}{data_modificacao}")
+
+                btn1, btn2, btn3, btn4 = st.columns([1, 1.5, 1.5, 4])
+                with btn1:
+                    if st.button("✏️ Editar", key=f"edit_{reg['id']}", use_container_width=True):
+                        st.query_params["page"] = "Editar"
+                        st.query_params["id"] = reg["id"]
                         st.rerun()
-                    with btn2:
-                        with st.popover("🗑️ Excluir", use_container_width=True):
-                            st.warning("⚠️ **Atenção:** Ação irreversível!")
-                            if st.button("✔️ Confirmar", key=f"conf_del_{reg['id']}", type="primary", use_container_width=True):
-                                deletar_registro(reg["id"])
-                                st.success("Registro excluído.")
-                                st.rerun()
-                    with btn3:
-                        df_reg = registros_para_dataframe([reg])
-                        st.download_button("⬇️ Exportar CSV", to_csv_bytes(df_reg), f"registro_{reg['id']}.csv", "text/csv", key=f"csv_{reg['id']}", use_container_width=True)
+                with btn1:
+                    with st.popover("🗑️ Excluir"):
+                        st.warning("⚠️ **Atenção:** Esta ação é irreversível e apagará todos os itens vinculados a este registro.")
+                        if st.button("✔️ Confirmar Exclusão", key=f"conf_del_{reg['id']}", type="primary", use_container_width=True):
+                            deletar_registro(reg["id"])
+                            st.success("Registro excluído.")
+                            st.rerun()
+                with btn2:
+                    df_reg = registros_para_dataframe([reg])
+                    st.download_button(
+                        "⬇️ Exportar CSV",
+                        data=to_csv_bytes(df_reg),
+                        file_name=f"registro_{reg['id']}_{reg['data_evento']}.csv",
+                        mime="text/csv",
+                        key=f"csv_{reg['id']}",
+                    )
+    else:
+        st.info("Nenhum registro encontrado com os filtros aplicados.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PÁGINA DE EDIÇÃO — (acessada via query params)
+# ════════════════════════════════════════════════════════════════════════════
+elif pagina == "Editar Registro" and "page" in st.query_params and st.query_params["page"] == "Editar":
+
+    rid_para_editar = int(st.query_params.get("id", 0))
+    if not rid_para_editar:
+        st.error("ID de registro inválido para edição.")
+        st.stop()
+
+    # Carrega dados existentes
+    reg_data = buscar_um_registro(rid_para_editar)
+    itens_data = buscar_itens(rid_para_editar)
+
+    if not reg_data:
+        st.error(f"Registro com ID {rid_para_editar} não encontrado.")
+        st.stop()
+
+    st.subheader(f"✏️ Editando Registro #{rid_para_editar}")
+
+    # Converte bool para o formato do formulário
+    for item in itens_data:
+        item["consta"] = bool(item["consta"])
+        item["defeituoso"] = bool(item["defeituoso"])
+
+    # Mapeia itens por nome de equipamento para fácil acesso
+    itens_map = {item["equipamento"]: item for item in itens_data}
+
+    # ── Dados gerais ─────────────────────────────────────────────────────────
+    st.markdown("### 1. Dados Gerais")
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+    with col1:
+        idx_tec = TECNICOS.index(reg_data["tecnico"]) if reg_data["tecnico"] in TECNICOS else 0
+        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS, index=idx_tec)
+
+    with col2:
+        idx_tipo = ["Montagem", "Desmontagem"].index(reg_data["tipo"]) if reg_data["tipo"] in ["Montagem", "Desmontagem"] else 0
+        tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], index=idx_tipo, horizontal=False)
+
+    with col3:
+        qtd_kits = st.number_input("📦 Qtd. de Kits *", min_value=1, max_value=99, value=int(reg_data["qtd_kits"]), step=1)
+
+    with col4:
+        kits_usados = st.text_input("🧰 Kits Usados *", value=reg_data["kits_usados"], placeholder="Ex: Kit 01, Kit 03")
+
+    col_loc, col_dt = st.columns([3, 1])
+    with col_loc:
+        local = st.text_input("📍 Local *", value=reg_data["local"], placeholder="Ex: CRAS Norte – Rua das Flores, 123")
+
+    with col_dt:
+        data_evento = st.date_input("📅 Data *", value=reg_data["data_evento"], format="DD/MM/YYYY")
+
+    st.markdown("---")
+
+    # ── Checklist de equipamentos ─────────────────────────────────────────────
+    st.markdown(f"### 2. Checklist de Equipamentos — {formatar_tipo(tipo)}")
+
+    itens_form = []
+    for eq in EQUIPAMENTOS:
+        item_existente = itens_map.get(eq, {})
+        with st.container(border=True):
+            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
+            with c1:
+                st.markdown(f"**{eq}**")
+            with c2:
+                consta = st.checkbox("Consta", value=item_existente.get("consta", True), key=f"consta_{eq}_{rid_para_editar}")
+            with c3:
+                defeituoso = st.checkbox("Defeito", value=item_existente.get("defeituoso", False), key=f"def_{eq}_{rid_para_editar}")
+            kit_def = obs_item = ""
+            if defeituoso:
+                with c4:
+                    kit_def = st.text_input("Nº Kit", value=item_existente.get("kit_defeito", ""), key=f"kitdef_{eq}_{rid_para_editar}", placeholder="Ex: 03")
+                with c5:
+                    obs_item = st.text_input("Descrição do defeito", value=item_existente.get("obs_item", ""), key=f"obs_{eq}_{rid_para_editar}", placeholder="Descreva brevemente...")
+
+        itens_form.append({
+            "equipamento": eq, "consta": consta, "defeituoso": defeituoso,
+            "kit_defeito": kit_def, "obs_item": obs_item,
+        })
+
+    st.markdown("---")
+
+    # ── Observações gerais ────────────────────────────────────────────────────
+    st.markdown("### 3. Observações Gerais")
+    observacoes = st.text_area(
+        "Registre qualquer informação adicional relevante:",
+        value=reg_data["observacoes"],
+        height=110,
+        label_visibility="collapsed",
+    )
+
+    st.markdown("---")
+
+    # ── Botões de ação ────────────────────────────────────────────────────────
+    btn_salvar, btn_cancelar = st.columns(2)
+
+    if btn_salvar.button("💾 Salvar Alterações", type="primary", use_container_width=True):
+        erros = []
+        if not tecnico: erros.append("⛔ Nome do técnico é obrigatório.")
+        if not kits_usados.strip(): erros.append("⛔ O preenchimento dos kits usados é obrigatório.")
+        if not local.strip(): erros.append("⛔ Local é obrigatório.")
+
+        if erros:
+            for e in erros: st.error(e)
         else:
-            st.info("Nenhum registro encontrado com os filtros aplicados.")
+            with st.spinner("Atualizando registro..."):
+                atualizar_registro(
+                    rid_para_editar, tecnico, tipo, local.strip(), qtd_kits,
+                    kits_usados.strip(), data_evento, observacoes, itens_form
+                )
+            st.success(f"✅ Registro #{rid_para_editar} atualizado com sucesso!")
+            st.balloons()
+            st.query_params.clear()
+            import time
+            time.sleep(2)
+            st.rerun()
+
+    if btn_cancelar.button("❌ Cancelar Edição", use_container_width=True):
+        st.query_params.clear()
+        st.rerun()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -396,7 +492,7 @@ elif pagina == "Equipamentos Defeituosos":
     with st.expander("🎛️ Filtros", expanded=True):
         d1, d2, d3, d4 = st.columns([2, 1, 1, 2])
         with d1:
-            d_tec = st.text_input("👤 Técnico", key="dtec")
+            d_tec = st.selectbox("👤 Técnico", ["Todos"] + TECNICOS, key="dtec")
         with d2:
             d_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="dini", format="DD/MM/YYYY")
         with d3:
@@ -406,7 +502,7 @@ elif pagina == "Equipamentos Defeituosos":
 
     defeituosos = buscar_defeituosos(
         data_ini=d_ini, data_fim=d_fim,
-        tecnico=d_tec or None,
+        tecnico=d_tec if d_tec != "Todos" else None,
         equipamento=d_eq,
     )
 
@@ -422,6 +518,7 @@ elif pagina == "Equipamentos Defeituosos":
             "local":        "Local",
             "tecnico":      "Técnico",
             "qtd_kits":     "Kits",
+            "kits_usados":  "Kits Usados",
             "equipamento":  "Equipamento",
             "kit_defeito":  "Nº Kit",
             "obs_item":     "Descrição do Defeito",
@@ -459,7 +556,7 @@ elif pagina == "Equipamentos Defeituosos":
 # ════════════════════════════════════════════════════════════════════════════
 # PÁGINA 4 — DASHBOARD
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "Dashboard":
+elif pagina == "Dashboard" and ("page" not in st.query_params):
 
     st.subheader("📊 Dashboard Geral")
 
