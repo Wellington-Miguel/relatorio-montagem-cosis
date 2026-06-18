@@ -245,6 +245,11 @@ elif pagina == "Consultar Registros":
 
     st.subheader("🔍 Consultar Registros")
 
+    # Se vier de um salvamento bem sucedido, exibe a mensagem!
+    if "msg_sucesso" in st.session_state:
+        st.success(st.session_state.pop("msg_sucesso"))
+        st.balloons()
+
     with st.expander("🎛️ Filtros de Busca", expanded=True):
         fc1, fc2, fc3, fc4, fc5 = st.columns([2, 2, 1, 1, 1])
         with fc1:
@@ -402,24 +407,24 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
     col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
     with col1:
         idx_tec = TECNICOS.index(reg_data["tecnico"]) if reg_data["tecnico"] in TECNICOS else 0
-        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS, index=idx_tec)
+        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS, index=idx_tec, key=f"edit_tec_{rid_para_editar}")
 
     with col2:
         idx_tipo = ["Montagem", "Desmontagem"].index(reg_data["tipo"]) if reg_data["tipo"] in ["Montagem", "Desmontagem"] else 0
-        tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], index=idx_tipo, horizontal=False)
+        tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], index=idx_tipo, horizontal=False, key=f"edit_tipo_{rid_para_editar}")
 
     with col3:
-        qtd_kits = st.number_input("📦 Qtd. de Kits *", min_value=1, max_value=99, value=int(reg_data["qtd_kits"]), step=1)
+        qtd_kits = st.number_input("📦 Qtd. de Kits *", min_value=1, max_value=99, value=int(reg_data["qtd_kits"]), step=1, key=f"edit_qtd_{rid_para_editar}")
 
     with col4:
-        kits_usados = st.text_input("🧰 Kits Usados *", value=reg_data["kits_usados"], placeholder="Ex: Kit 01, Kit 03")
+        kits_usados = st.text_input("🧰 Kits Usados *", value=reg_data["kits_usados"], placeholder="Ex: Kit 01, Kit 03", key=f"edit_kits_{rid_para_editar}")
 
     col_loc, col_dt = st.columns([3, 1])
     with col_loc:
-        local = st.text_input("📍 Local *", value=reg_data["local"], placeholder="Ex: CRAS Norte – Rua das Flores, 123")
+        local = st.text_input("📍 Local *", value=reg_data["local"], placeholder="Ex: CRAS Norte – Rua das Flores, 123", key=f"edit_loc_{rid_para_editar}")
 
     with col_dt:
-        data_evento = st.date_input("📅 Data *", value=reg_data["data_evento"], format="DD/MM/YYYY")
+        data_evento = st.date_input("📅 Data *", value=reg_data["data_evento"], format="DD/MM/YYYY", key=f"edit_data_{rid_para_editar}")
 
     st.markdown("---")
 
@@ -434,15 +439,15 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
             with c1:
                 st.markdown(f"**{eq}**")
             with c2:
-                consta = st.checkbox("Consta", value=item_existente.get("consta", True), key=f"consta_{eq}_{rid_para_editar}")
+                consta = st.checkbox("Consta", value=item_existente.get("consta", True), key=f"edit_consta_{eq}_{rid_para_editar}")
             with c3:
-                defeituoso = st.checkbox("Defeito", value=item_existente.get("defeituoso", False), key=f"def_{eq}_{rid_para_editar}")
+                defeituoso = st.checkbox("Defeito", value=item_existente.get("defeituoso", False), key=f"edit_def_{eq}_{rid_para_editar}")
             kit_def = obs_item = ""
             if defeituoso:
                 with c4:
-                    kit_def = st.text_input("Nº Kit", value=item_existente.get("kit_defeito", ""), key=f"kitdef_{eq}_{rid_para_editar}", placeholder="Ex: 03")
+                    kit_def = st.text_input("Nº Kit", value=item_existente.get("kit_defeito", ""), key=f"edit_kitdef_{eq}_{rid_para_editar}", placeholder="Ex: 03")
                 with c5:
-                    obs_item = st.text_input("Descrição do defeito", value=item_existente.get("obs_item", ""), key=f"obs_{eq}_{rid_para_editar}", placeholder="Descreva brevemente...")
+                    obs_item = st.text_input("Descrição do defeito", value=item_existente.get("obs_item", ""), key=f"edit_obs_{eq}_{rid_para_editar}", placeholder="Descreva brevemente...")
 
         itens_form.append({
             "equipamento": eq, "consta": consta, "defeituoso": defeituoso,
@@ -458,6 +463,7 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
         value=reg_data["observacoes"],
         height=110,
         label_visibility="collapsed",
+        key=f"edit_obs_geral_{rid_para_editar}"
     )
 
     st.markdown("---")
@@ -479,11 +485,8 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
                     rid_para_editar, tecnico, tipo, local.strip(), qtd_kits,
                     kits_usados.strip(), data_evento, observacoes, itens_form
                 )
-            st.success(f"✅ Registro #{rid_para_editar} atualizado com sucesso!")
-            st.balloons()
+            st.session_state["msg_sucesso"] = f"✅ Registro #{rid_para_editar} atualizado com sucesso!"
             st.query_params.clear()
-            import time
-            time.sleep(2)
             st.rerun()
 
     if btn_cancelar.button("❌ Cancelar Edição", use_container_width=True):
