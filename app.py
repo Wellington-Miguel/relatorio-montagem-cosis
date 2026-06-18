@@ -6,7 +6,6 @@ Sistema de Gestão de Montagem e Desmontagem
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
-import itertools
 
 from constants import (
     EQUIPAMENTOS, VERIFICACOES_ADICIONAIS, TECNICOS,
@@ -14,7 +13,7 @@ from constants import (
 )
 from database import (
     init_db, salvar_registro, deletar_registro, atualizar_registro, buscar_um_registro,
-    buscar_registros, buscar_itens, buscar_defeituosos, buscar_historico,
+    buscar_registros, buscar_itens, buscar_defeituosos,
     listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
     operacoes_por_tecnico, ultimos_registros,
@@ -48,19 +47,15 @@ with st.sidebar:
         "Equipamentos Defeituosos",
         "Dashboard",
     ]
-    if "nav_menu" not in st.session_state:
-        st.session_state["nav_menu"] = "Novo Registro"
-
     # A página de edição é oculta e acessada via query param
     if "page" in st.query_params and st.query_params["page"] == "Editar":
         st.info("✏️ Modo de Edição Ativo")
         if st.button("⬅️ Voltar"):
             st.query_params.clear()
-            st.session_state["nav_menu"] = "Consultar Registros"
             st.rerun()
         pagina = "Editar Registro"
     else:
-        pagina = st.radio("Navegação", paginas_visiveis, key="nav_menu", label_visibility="collapsed")
+        pagina = st.radio("Navegação", paginas_visiveis, label_visibility="collapsed")
     st.markdown("---")
     stats = stats_gerais()
     st.markdown(f"""
@@ -249,11 +244,6 @@ elif pagina == "Consultar Registros":
 
     st.subheader("🔍 Consultar Registros")
 
-    # Se vier de um salvamento bem sucedido, exibe a mensagem!
-    if "msg_sucesso" in st.session_state:
-        st.success(st.session_state.pop("msg_sucesso"))
-        st.balloons()
-
     with st.expander("🎛️ Filtros de Busca", expanded=True):
         fc1, fc2, fc3, fc4, fc5 = st.columns([2, 2, 1, 1, 1])
         with fc1:
@@ -341,14 +331,6 @@ elif pagina == "Consultar Registros":
                 if reg["observacoes"]:
                     st.info(f"📝 **Observações:** {reg['observacoes']}")
 
-                historico = buscar_historico(reg["id"])
-                if historico:
-                    with st.expander("🕒 Histórico de Alterações"):
-                        for data_edicao, alteracoes in itertools.groupby(historico, key=lambda x: x['editado_em']):
-                            st.markdown(f"**Editado em {formatar_data(data_edicao)}:**")
-                            for h in alteracoes:
-                                st.markdown(f"- **{h['campo']}**: `{h['valor_antigo']}` ➡️ `{h['valor_novo']}`")
-
                 data_modificacao = f" | Editado em: {formatar_data(reg['atualizado_em'])}" if reg.get('atualizado_em') else ""
                 st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}{data_modificacao}")
 
@@ -396,72 +378,62 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
         st.error(f"Registro com ID {rid_para_editar} não encontrado.")
         st.stop()
 
-    # ── Inicializa session_state para evitar reset ao digitar ─────────────────
-    init_key = f"loaded_edit_{rid_para_editar}"
-    if not st.session_state.get(init_key):
-        st.session_state[f"edit_tec_{rid_para_editar}"] = reg_data["tecnico"]
-        st.session_state[f"edit_tipo_{rid_para_editar}"] = reg_data["tipo"]
-        st.session_state[f"edit_qtd_{rid_para_editar}"] = int(reg_data["qtd_kits"])
-        st.session_state[f"edit_kits_{rid_para_editar}"] = reg_data["kits_usados"]
-        st.session_state[f"edit_loc_{rid_para_editar}"] = reg_data["local"]
-        st.session_state[f"edit_data_{rid_para_editar}"] = reg_data["data_evento"]
-        st.session_state[f"edit_obs_geral_{rid_para_editar}"] = reg_data["observacoes"]
-
-        itens_map = {item["equipamento"]: item for item in itens_data}
-        for eq in EQUIPAMENTOS:
-            ie = itens_map.get(eq, {})
-            st.session_state[f"edit_consta_{eq}_{rid_para_editar}"] = bool(ie.get("consta", True))
-            st.session_state[f"edit_def_{eq}_{rid_para_editar}"] = bool(ie.get("defeituoso", False))
-            st.session_state[f"edit_kitdef_{eq}_{rid_para_editar}"] = ie.get("kit_defeito", "")
-            st.session_state[f"edit_obs_{eq}_{rid_para_editar}"] = ie.get("obs_item", "")
-
-        st.session_state[init_key] = True
-
     st.subheader(f"✏️ Editando Registro #{rid_para_editar}")
+
+    # Converte bool para o formato do formulário
+    for item in itens_data:
+        item["consta"] = bool(item["consta"])
+        item["defeituoso"] = bool(item["defeituoso"])
+
+    # Mapeia itens por nome de equipamento para fácil acesso
+    itens_map = {item["equipamento"]: item for item in itens_data}
 
     # ── Dados gerais ─────────────────────────────────────────────────────────
     st.markdown("### 1. Dados Gerais")
     col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
     with col1:
-        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS, key=f"edit_tec_{rid_para_editar}")
+        idx_tec = TECNICOS.index(reg_data["tecnico"]) if reg_data["tecnico"] in TECNICOS else 0
+        tecnico = st.selectbox("👤 Técnico Responsável *", TECNICOS, index=idx_tec)
 
     with col2:
-        tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], horizontal=False, key=f"edit_tipo_{rid_para_editar}")
+        idx_tipo = ["Montagem", "Desmontagem"].index(reg_data["tipo"]) if reg_data["tipo"] in ["Montagem", "Desmontagem"] else 0
+        tipo = st.radio("🔧 Tipo *", ["Montagem", "Desmontagem"], index=idx_tipo, horizontal=False)
 
     with col3:
-        qtd_kits = st.number_input("📦 Qtd. de Kits *", min_value=1, max_value=99, step=1, key=f"edit_qtd_{rid_para_editar}")
+        qtd_kits = st.number_input("📦 Qtd. de Kits *", min_value=1, max_value=99, value=int(reg_data["qtd_kits"]), step=1)
 
     with col4:
-        kits_usados = st.text_input("🧰 Kits Usados *", placeholder="Ex: Kit 01, Kit 03", key=f"edit_kits_{rid_para_editar}")
+        kits_usados = st.text_input("🧰 Kits Usados *", value=reg_data["kits_usados"], placeholder="Ex: Kit 01, Kit 03")
 
     col_loc, col_dt = st.columns([3, 1])
     with col_loc:
-        local = st.text_input("📍 Local *", placeholder="Ex: CRAS Norte – Rua das Flores, 123", key=f"edit_loc_{rid_para_editar}")
+        local = st.text_input("📍 Local *", value=reg_data["local"], placeholder="Ex: CRAS Norte – Rua das Flores, 123")
 
     with col_dt:
-        data_evento = st.date_input("📅 Data *", format="DD/MM/YYYY", key=f"edit_data_{rid_para_editar}")
+        data_evento = st.date_input("📅 Data *", value=reg_data["data_evento"], format="DD/MM/YYYY")
 
     st.markdown("---")
 
     # ── Checklist de equipamentos ─────────────────────────────────────────────
-    st.markdown(f"### 2. Checklist de Equipamentos — {formatar_tipo(st.session_state.get(f'edit_tipo_{rid_para_editar}', 'Montagem'))}")
+    st.markdown(f"### 2. Checklist de Equipamentos — {formatar_tipo(tipo)}")
 
     itens_form = []
     for eq in EQUIPAMENTOS:
+        item_existente = itens_map.get(eq, {})
         with st.container(border=True):
             c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
             with c1:
                 st.markdown(f"**{eq}**")
             with c2:
-                consta = st.checkbox("Consta", key=f"edit_consta_{eq}_{rid_para_editar}")
+                consta = st.checkbox("Consta", value=item_existente.get("consta", True), key=f"consta_{eq}_{rid_para_editar}")
             with c3:
-                defeituoso = st.checkbox("Defeito", key=f"edit_def_{eq}_{rid_para_editar}")
+                defeituoso = st.checkbox("Defeito", value=item_existente.get("defeituoso", False), key=f"def_{eq}_{rid_para_editar}")
             kit_def = obs_item = ""
             if defeituoso:
                 with c4:
-                    kit_def = st.text_input("Nº Kit", key=f"edit_kitdef_{eq}_{rid_para_editar}", placeholder="Ex: 03")
+                    kit_def = st.text_input("Nº Kit", value=item_existente.get("kit_defeito", ""), key=f"kitdef_{eq}_{rid_para_editar}", placeholder="Ex: 03")
                 with c5:
-                    obs_item = st.text_input("Descrição do defeito", key=f"edit_obs_{eq}_{rid_para_editar}", placeholder="Descreva brevemente...")
+                    obs_item = st.text_input("Descrição do defeito", value=item_existente.get("obs_item", ""), key=f"obs_{eq}_{rid_para_editar}", placeholder="Descreva brevemente...")
 
         itens_form.append({
             "equipamento": eq, "consta": consta, "defeituoso": defeituoso,
@@ -474,9 +446,9 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
     st.markdown("### 3. Observações Gerais")
     observacoes = st.text_area(
         "Registre qualquer informação adicional relevante:",
+        value=reg_data["observacoes"],
         height=110,
         label_visibility="collapsed",
-        key=f"edit_obs_geral_{rid_para_editar}"
     )
 
     st.markdown("---")
@@ -498,19 +470,14 @@ elif pagina == "Editar Registro" and "page" in st.query_params and st.query_para
                     rid_para_editar, tecnico, tipo, local.strip(), qtd_kits,
                     kits_usados.strip(), data_evento, observacoes, itens_form
                 )
-            
-            if init_key in st.session_state:
-                del st.session_state[init_key]
-                
-            st.session_state["msg_sucesso"] = f"✅ Registro #{rid_para_editar} atualizado com sucesso!"
-            st.session_state["nav_menu"] = "Consultar Registros"
+            st.success(f"✅ Registro #{rid_para_editar} atualizado com sucesso!")
+            st.balloons()
             st.query_params.clear()
+            import time
+            time.sleep(2)
             st.rerun()
 
     if btn_cancelar.button("❌ Cancelar Edição", use_container_width=True):
-        if init_key in st.session_state:
-            del st.session_state[init_key]
-        st.session_state["nav_menu"] = "Consultar Registros"
         st.query_params.clear()
         st.rerun()
 
