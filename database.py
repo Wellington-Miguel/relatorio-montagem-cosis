@@ -91,12 +91,23 @@ def init_db():
             obs_item      TEXT    NOT NULL DEFAULT ''
         )
     """)
+    _exec("""
+        CREATE TABLE IF NOT EXISTS historico_edicoes (
+            id          SERIAL PRIMARY KEY,
+            registro_id INTEGER NOT NULL REFERENCES registros(id) ON DELETE CASCADE,
+            campo       TEXT    NOT NULL,
+            valor_antigo TEXT,
+            valor_novo   TEXT,
+            editado_em  TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+    """)
     _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS kits_usados TEXT NOT NULL DEFAULT '';")
     _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMP;")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_data    ON registros(data_evento)")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_tec     ON registros(tecnico)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_def   ON itens(defeituoso)")
     _exec("CREATE INDEX IF NOT EXISTS idx_itens_regid ON itens(registro_id)")
+    _exec("CREATE INDEX IF NOT EXISTS idx_hist_regid  ON historico_edicoes(registro_id)")
 
 
 # ── Escrita ───────────────────────────────────────────────────────────────────
@@ -138,6 +149,57 @@ def atualizar_registro(rid: int, tecnico, tipo, local, qtd_kits, kits_usados, da
     conn = _pool()
     try:
         with conn.cursor() as cur:
+            # --- Captura histórico de alterações ---
+            cur.execute("SELECT * FROM registros WHERE id = %s", (rid,))
+            old_reg = cur.fetchone()
+            cur.execute("SELECT * FROM itens WHERE registro_id = %s ORDER BY id", (rid,))
+            old_itens = cur.fetchall()
+            
+            alteracoes = []
+            if old_reg:
+                if old_reg["tecnico"] != tecnico:
+                    alteracoes.append(("Técnico", str(old_reg["tecnico"]), str(tecnico)))
+                if old_reg["tipo"] != tipo:
+                    alteracoes.append(("Tipo", str(old_reg["tipo"]), str(tipo)))
+                if old_reg["local"] != local:
+                    alteracoes.append(("Local", str(old_reg["local"]), str(local)))
+                if old_reg["qtd_kits"] != int(qtd_kits):
+                    alteracoes.append(("Qtd. Kits", str(old_reg["qtd_kits"]), str(qtd_kits)))
+                if old_reg["kits_usados"] != kits_usados:
+                    alteracoes.append(("Kits Usados", str(old_reg["kits_usados"]), str(kits_usados)))
+                if str(old_reg["data_evento"]) != str(data_evento):
+                    alteracoes.append(("Data", str(old_reg["data_evento"]), str(data_evento)))
+                if str(old_reg["observacoes"] or "") != str(observacoes or ""):
+                    alteracoes.append(("Observações", str(old_reg["observacoes"] or ""), str(observacoes or "")))
+            
+            old_itens_map = {i["equipamento"]: i for i in old_itens}
+            for new_item in itens:
+                eq = new_item["equipamento"]
+                old_i = old_itens_map.get(eq)
+                if old_i:
+                    if bool(old_i["consta"]) != bool(new_item["consta"]):
+                        v_antigo = "Consta" if old_i["consta"] else "Ausente"
+                        v_novo = "Consta" if new_item["consta"] else "Ausente"
+                        alteracoes.append((f"[{eq}] Presença", v_antigo, v_novo))
+                    if bool(old_i["defeituoso"]) != bool(new_item["defeituoso"]):
+                        v_antigo = "Com Defeito" if old_i["defeituoso"] else "OK"
+                        v_novo = "Com Defeito" if new_item["defeituoso"] else "OK"
+                        alteracoes.append((f"[{eq}] Condição", v_antigo, v_novo))
+                    if str(old_i["kit_defeito"] or "") != str(new_item.get("kit_defeito") or ""):
+                        alteracoes.append((f"[{eq}] Nº Kit Defeituoso", str(old_i["kit_defeito"] or "Nenhum"), str(new_item.get("kit_defeito") or "Nenhum")))
+                    if str(old_i["obs_item"] or "") != str(new_item.get("obs_item") or ""):
+                        alteracoes.append((f"[{eq}] Obs. Defeito", str(old_i["obs_item"] or "Nenhuma"), str(new_item.get("obs_item") or "Nenhuma")))
+            
+            if alteracoes:
+                agora = datetime.now()
+                psycopg2.extras.execute_values(
+                    cur,
+                    """INSERT INTO historico_edicoes
+                       (registro_id, campo, valor_antigo, valor_novo, editado_em)
+                       VALUES %s""",
+                    [(rid, c, a, n, agora) for c, a, n in alteracoes]
+                )
+
             # 1. Atualiza o registro principal
             cur.execute(
                 """UPDATE registros
@@ -208,6 +270,16 @@ def buscar_um_registro(rid: int) -> dict | None:
     if row:
         row["data_evento"] = datetime.strptime(str(row["data_evento"]), "%Y-%m-%d").date()
     return row
+
+
+def buscar_historico(registro_id: int) -> list[dict]:
+    rows = _exec(
+        "SELECT * FROM historico_edicoes WHERE registro_id = %s ORDER BY editado_em DESC, id DESC",
+        (registro_id,), fetch="all"
+    ) or []
+    for r in rows:
+        r["editado_em"] = str(r["editado_em"])
+    return rows
 
 
 def buscar_itens(registro_id: int) -> list[dict]:

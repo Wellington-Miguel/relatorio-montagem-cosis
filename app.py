@@ -6,6 +6,7 @@ Sistema de Gestão de Montagem e Desmontagem
 import streamlit as st
 import pandas as pd
 from datetime import date, datetime
+import itertools
 
 from constants import (
     EQUIPAMENTOS, VERIFICACOES_ADICIONAIS, TECNICOS,
@@ -13,7 +14,7 @@ from constants import (
 )
 from database import (
     init_db, salvar_registro, deletar_registro, atualizar_registro, buscar_um_registro,
-    buscar_registros, buscar_itens, buscar_defeituosos,
+    buscar_registros, buscar_itens, buscar_defeituosos, buscar_historico,
     listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
     operacoes_por_tecnico, ultimos_registros,
@@ -330,6 +331,14 @@ elif pagina == "Consultar Registros":
 
                 if reg["observacoes"]:
                     st.info(f"📝 **Observações:** {reg['observacoes']}")
+
+                historico = buscar_historico(reg["id"])
+                if historico:
+                    with st.expander("🕒 Histórico de Alterações"):
+                        for data_edicao, alteracoes in itertools.groupby(historico, key=lambda x: x['editado_em']):
+                            st.markdown(f"**Editado em {formatar_data(data_edicao)}:**")
+                            for h in alteracoes:
+                                st.markdown(f"- **{h['campo']}**: `{h['valor_antigo']}` ➡️ `{h['valor_novo']}`")
 
                 data_modificacao = f" | Editado em: {formatar_data(reg['atualizado_em'])}" if reg.get('atualizado_em') else ""
                 st.caption(f"Registrado em: {formatar_data(reg['criado_em'])}{data_modificacao}")
