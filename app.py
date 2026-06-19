@@ -71,17 +71,28 @@ with st.sidebar:
         "Equipamentos Defeituosos",
         "Dashboard",
     ]
-    # A página de edição é acessada via query param
-    if "page" in st.query_params and st.query_params["page"] == "Editar":
+    # Fonte de verdade: session_state. Query params são secundários (deep-link / URL).
+    in_edit_mode = st.session_state.get("_edit_mode", False) or (
+        st.query_params.get("page") == "Editar"
+    )
+    if in_edit_mode:
+        # Sincroniza session_state caso tenha chegado via URL (reload, deep-link)
+        if not st.session_state.get("_edit_mode"):
+            st.session_state["_edit_mode"] = True
+            _rid_url = st.query_params.get("id", "0")
+            st.session_state["_edit_rid"] = int(_rid_url) if _rid_url else 0
         st.info("✏️ Modo de Edição Ativo")
         if st.button("⬅️ Voltar"):
+            st.session_state.pop("_edit_mode", None)
+            st.session_state.pop("_edit_rid", None)
             st.query_params.clear()
             if "edit_state" in st.session_state:
                 del st.session_state["edit_state"]
             st.rerun()
         pagina = "Editar Registro"
     else:
-        pagina = st.radio("Navegação", paginas_visiveis, label_visibility="collapsed")
+        pagina = st.radio("Navegação", paginas_visiveis, key="nav_radio",
+                          label_visibility="collapsed")
     st.markdown("---")
     stats = stats_gerais()
     st.markdown(f"""
@@ -371,9 +382,10 @@ elif pagina == "Consultar Registros":
                 btn1, btn2, btn3 = st.columns([1, 1.5, 4])
                 with btn1:
                     if st.button("✏️ Editar", key=f"edit_{reg['id']}", use_container_width=True):
+                        st.session_state["_edit_mode"] = True
+                        st.session_state["_edit_rid"]  = reg["id"]
                         st.query_params["page"] = "Editar"
                         st.query_params["id"]   = reg["id"]
-                        # Limpa estado de edição anterior, se houver
                         if "edit_state" in st.session_state:
                             del st.session_state["edit_state"]
                         st.rerun()
@@ -399,9 +411,9 @@ elif pagina == "Consultar Registros":
 # Formulário estável: dados carregados UMA VEZ no session_state.
 # Checkboxes e outros inputs não causam recarregamento do banco.
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
+elif pagina == "Editar Registro":
 
-    rid_para_editar = int(st.query_params.get("id", 0))
+    rid_para_editar = st.session_state.get("_edit_rid") or int(st.query_params.get("id", 0))
     if not rid_para_editar:
         st.error("ID de registro inválido para edição.")
         st.stop()
@@ -599,9 +611,10 @@ elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
                 )
             st.success(f"✅ Registro #{rid_para_editar} atualizado com sucesso!")
             st.balloons()
-            # Limpa estado e redireciona
             if "edit_state" in st.session_state:
                 del st.session_state["edit_state"]
+            st.session_state.pop("_edit_mode", None)
+            st.session_state.pop("_edit_rid", None)
             st.query_params.clear()
             import time; time.sleep(1)
             st.rerun()
@@ -609,6 +622,8 @@ elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
     if btn_cancelar.button("❌ Cancelar Edição", use_container_width=True):
         if "edit_state" in st.session_state:
             del st.session_state["edit_state"]
+        st.session_state.pop("_edit_mode", None)
+        st.session_state.pop("_edit_rid", None)
         st.query_params.clear()
         st.rerun()
 
