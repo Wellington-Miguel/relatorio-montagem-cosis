@@ -62,6 +62,93 @@ def formatar_ts(ts_str) -> str:
     return dt.strftime("%d/%m/%Y %H:%M") + " (BRT)"
 
 
+# ── Helpers de auditoria / diff ──────────────────────────────────────────────
+
+_CAMPO_LABEL: dict = {
+    "tecnico":     ("👤", "Técnico"),
+    "tipo":        ("🔧", "Tipo"),
+    "local":       ("📍", "Local"),
+    "qtd_kits":    ("📦", "Qtd. Kits"),
+    "kits_usados": ("🧰", "Kits Usados"),
+    "data_evento": ("📅", "Data"),
+    "observacoes": ("📝", "Observações"),
+    "consta":      ("✓",  "Consta"),
+    "defeituoso":  ("⚠️", "Defeituoso"),
+    "kit_defeito": ("🔢", "Nº Kit"),
+    "obs_item":    ("💬", "Descrição do Defeito"),
+}
+
+
+def _humanizar(valor: str) -> str:
+    if valor == "True":  return "Sim"
+    if valor == "False": return "Não"
+    return valor if valor else "—"
+
+
+def _diff_html(campo: str, antes: str, depois: str) -> str:
+    icon, nome = _CAMPO_LABEL.get(campo, ("•", campo.replace("_", " ").title()))
+    return (
+        f'<div class="diff-row">'
+        f'<span class="diff-label">{icon} {nome}</span>'
+        f'<span class="diff-antes">{_humanizar(antes)}</span>'
+        f'<span class="diff-arrow">→</span>'
+        f'<span class="diff-depois">{_humanizar(depois)}</span>'
+        f'</div>'
+    )
+
+
+def render_auditoria(entrada: dict) -> None:
+    """Renderiza uma entrada de auditoria de forma visual e estruturada."""
+    dt_brt = entrada.get("alterado_em_brt")
+    ts_str = dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)" if dt_brt else "—"
+    autor  = entrada.get("alterado_por")  or "não informado"
+    just   = entrada.get("justificativa") or "sem justificativa"
+    diff   = entrada.get("diff", {})
+
+    with st.container(border=True):
+        h1, h2 = st.columns([3, 2])
+        h1.markdown(f"🕐 **{ts_str}**")
+        h2.markdown(f"👤 **{autor}**")
+        st.caption(f"📝 {just}")
+
+        campos_escalares = {k: v for k, v in diff.items() if k != "itens"}
+        itens_diff       = diff.get("itens", {})
+        total            = len(campos_escalares) + sum(len(v) for v in itens_diff.values())
+
+        if total == 0:
+            st.caption("Nenhuma diferença detectada nesta edição.")
+            return
+
+        st.markdown(
+            f"<p style='font-size:0.78em;color:#6B7280;margin:4px 0 6px'>"
+            f"{total} campo(s) alterado(s)</p>",
+            unsafe_allow_html=True,
+        )
+
+        if campos_escalares:
+            st.markdown(
+                "".join(_diff_html(c, v["antes"], v["depois"])
+                        for c, v in campos_escalares.items()),
+                unsafe_allow_html=True,
+            )
+
+        if itens_diff:
+            st.markdown(
+                "<p class='diff-equip-header'>Checklist de Equipamentos</p>",
+                unsafe_allow_html=True,
+            )
+            for equip, mudancas in itens_diff.items():
+                st.markdown(
+                    f"<p class='diff-equip-name'>🔧 {equip}</p>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    "".join(_diff_html(c, v["antes"], v["depois"])
+                            for c, v in mudancas.items()),
+                    unsafe_allow_html=True,
+                )
+
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📂 Menu")
@@ -343,40 +430,7 @@ elif pagina == "Consultar Registros":
                 if audit:
                     with tabs[1]:
                         for entrada in audit:
-                            dt_brt = entrada.get("alterado_em_brt")
-                            ts_str = (dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)"
-                                      if dt_brt else "—")
-                            just   = entrada.get("justificativa") or "*(sem justificativa)*"
-                            autor  = entrada.get("alterado_por")  or "*(não informado)*"
-                            diff   = entrada.get("diff", {})
-
-                            st.markdown(f"**🕐 {ts_str}** · Autor: {autor}")
-                            st.markdown(f"*Justificativa:* {just}")
-
-                            if diff:
-                                campos_escalares = {k: v for k, v in diff.items()
-                                                    if k != "itens"}
-                                if campos_escalares:
-                                    st.markdown("**Campos alterados:**")
-                                    for campo, vals in campos_escalares.items():
-                                        label = campo.replace("_", " ").title()
-                                        st.markdown(
-                                            f"- **{label}:** "
-                                            f"`{vals['antes']}` → `{vals['depois']}`"
-                                        )
-                                itens_diff = diff.get("itens", {})
-                                if itens_diff:
-                                    st.markdown("**Checklist alterado:**")
-                                    for equip, mudancas in itens_diff.items():
-                                        for campo, vals in mudancas.items():
-                                            label = campo.replace("_", " ").title()
-                                            st.markdown(
-                                                f"- **{equip} / {label}:** "
-                                                f"`{vals['antes']}` → `{vals['depois']}`"
-                                            )
-                            else:
-                                st.caption("Nenhuma diferença detectada nesta edição.")
-                            st.markdown("---")
+                            render_auditoria(entrada)
 
                 # ── Botões de ação ─────────────────────────────────────────────
                 btn1, btn2, btn3 = st.columns([1, 1.5, 4])
@@ -557,32 +611,7 @@ elif pagina == "Editar Registro":
     if audit_existente:
         with st.expander(f"🕵️ Ver Histórico de Alterações Anteriores ({len(audit_existente)})"):
             for entrada in audit_existente:
-                dt_brt = entrada.get("alterado_em_brt")
-                ts_str = dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)" if dt_brt else "—"
-                just   = entrada.get("justificativa") or "*(sem justificativa)*"
-                autor  = entrada.get("alterado_por")  or "*(não informado)*"
-                diff   = entrada.get("diff", {})
-
-                st.markdown(f"**🕐 {ts_str}** · Por: **{autor}**")
-                st.markdown(f"*Justificativa:* {just}")
-
-                if diff:
-                    campos_escalares = {k: v for k, v in diff.items() if k != "itens"}
-                    for campo, vals in campos_escalares.items():
-                        label = campo.replace("_", " ").title()
-                        st.markdown(f"- **{label}:** `{vals['antes']}` → `{vals['depois']}`")
-                    itens_diff = diff.get("itens", {})
-                    if itens_diff:
-                        for equip, mudancas in itens_diff.items():
-                            for campo, vals in mudancas.items():
-                                label = campo.replace("_", " ").title()
-                                st.markdown(
-                                    f"- **{equip} / {label}:** "
-                                    f"`{vals['antes']}` → `{vals['depois']}`"
-                                )
-                else:
-                    st.caption("Nenhuma diferença detectada.")
-                st.markdown("---")
+                render_auditoria(entrada)
 
     # ── Botões de ação ─────────────────────────────────────────────────────
     btn_salvar, btn_cancelar = st.columns(2)

@@ -58,5 +58,58 @@ div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:f
 
 /* ── Linhas separadoras sutis ────────────────────────────── */
 hr { border-color: rgba(255, 255, 255, 0.05) !important; margin: 2rem 0; }
+
+/* ── Histórico de Auditoria — Diff Visual ────────────────── */
+.diff-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.025);
+    margin-bottom: 3px;
+}
+.diff-label {
+    min-width: 170px;
+    font-size: 0.82em;
+    color: #9CA3AF;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.diff-antes {
+    background: rgba(239, 68, 68, 0.12);
+    color: #F87171;
+    padding: 2px 9px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.82em;
+    text-decoration: line-through;
+    opacity: 0.85;
+}
+.diff-depois {
+    background: rgba(80, 200, 120, 0.12);
+    color: #50C878;
+    padding: 2px 9px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.82em;
+    font-weight: 600;
+}
+.diff-arrow { color: #4B5563; font-size: 0.9em; }
+.diff-equip-header {
+    font-size: 0.73em;
+    font-weight: 700;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 12px 0 4px 0 !important;
+}
+.diff-equip-name {
+    font-size: 0.83em;
+    font-weight: 600;
+    color: #D1D5DB;
+    padding: 4px 6px 2px;
+    margin: 0 !important;
+}
 </style>
 """
