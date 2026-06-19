@@ -39,8 +39,31 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto",
 )
-init_db()
 st.markdown(CSS, unsafe_allow_html=True)
+
+
+# ── Autenticação ──────────────────────────────────────────────────────────────
+def _check_auth():
+    if st.session_state.get("autenticado"):
+        return
+    st.markdown(f"## {APP_ICON} {APP_TITLE}")
+    st.markdown("### 🔒 Acesso Restrito")
+    st.caption("Informe a senha para acessar o sistema.")
+    senha = st.text_input("Senha", type="password", key="_auth_senha")
+    if st.button("Entrar", type="primary"):
+        senha_correta = st.secrets.get("APP_PASSWORD", "")
+        if not senha_correta:
+            st.error("APP_PASSWORD não configurada nos secrets do app.")
+        elif senha == senha_correta:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Senha incorreta.")
+    st.stop()
+
+
+_check_auth()
+init_db()
 
 # ── Header ───────────────────────────────────────────────────────────────────
 st.markdown(f"<h1>{APP_ICON} <span>{APP_TITLE}</span></h1>", unsafe_allow_html=True)
@@ -191,7 +214,11 @@ with st.sidebar:
     - Kits movimentados: **{stats['total_kits']}**
     """)
     st.markdown("---")
-    st.caption(f"☁️ Banco: Supabase (PostgreSQL) · Versão {VERSION} /n · by Wellington Miguel")
+    st.caption(f"☁️ Banco: Supabase (PostgreSQL) · Versão {VERSION} · by Wellington Miguel")
+    st.markdown("---")
+    if st.button("🔒 Sair", use_container_width=True):
+        st.session_state["autenticado"] = False
+        st.rerun()
 
 
 # ════════════════════════════════════════════════════════════════════════════
