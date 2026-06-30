@@ -32,6 +32,7 @@ TECNICOS = [
     "Glaucia Barbosa",
     "Beatriz Alves",
     "Wellington Miguel",
+    "João Vitor",
 ]
 
 VERIFICACOES_ADICIONAIS = [
