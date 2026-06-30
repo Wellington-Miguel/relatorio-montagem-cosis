@@ -219,8 +219,13 @@ def _build_diff(reg_antigo: dict, itens_antigos: list[dict],
         campos_item = ["consta", "defeituoso", "kit_defeito", "obs_item"]
         item_ch: dict = {}
         for c in campos_item:
-            va = str(ant.get(c, ""))
-            vn = str(nov.get(c, ""))
+            if c in ("consta", "defeituoso"):
+                # buscar_itens retorna int (0/1); form retorna bool → normaliza os dois
+                va = "True" if ant.get(c) else "False"
+                vn = "True" if nov.get(c) else "False"
+            else:
+                va = str(ant.get(c) or "")
+                vn = str(nov.get(c) or "")
             if va != vn:
                 item_ch[c] = {"antes": va, "depois": vn}
         if item_ch:

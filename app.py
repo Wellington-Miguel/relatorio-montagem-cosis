@@ -39,8 +39,31 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto",
 )
-init_db()
 st.markdown(CSS, unsafe_allow_html=True)
+
+
+# ── Autenticação ──────────────────────────────────────────────────────────────
+def _check_auth():
+    if st.session_state.get("autenticado"):
+        return
+    st.markdown(f"## {APP_ICON} {APP_TITLE}")
+    st.markdown("### 🔒 Acesso Restrito")
+    st.caption("Informe a senha para acessar o sistema.")
+    senha = st.text_input("Senha", type="password", key="_auth_senha")
+    if st.button("Entrar", type="primary"):
+        senha_correta = st.secrets.get("APP_PASSWORD", "")
+        if not senha_correta:
+            st.error("APP_PASSWORD não configurada nos secrets do app.")
+        elif senha == senha_correta:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Senha incorreta.")
+    st.stop()
+
+
+_check_auth()
+init_db()
 
 # ── Header ───────────────────────────────────────────────────────────────────
 st.markdown(f"<h1>{APP_ICON} <span>{APP_TITLE}</span></h1>", unsafe_allow_html=True)
@@ -62,6 +85,93 @@ def formatar_ts(ts_str) -> str:
     return dt.strftime("%d/%m/%Y %H:%M") + " (BRT)"
 
 
+# ── Helpers de auditoria / diff ──────────────────────────────────────────────
+
+_CAMPO_LABEL: dict = {
+    "tecnico":     ("👤", "Técnico"),
+    "tipo":        ("🔧", "Tipo"),
+    "local":       ("📍", "Local"),
+    "qtd_kits":    ("📦", "Qtd. Kits"),
+    "kits_usados": ("🧰", "Kits Usados"),
+    "data_evento": ("📅", "Data"),
+    "observacoes": ("📝", "Observações"),
+    "consta":      ("✓",  "Consta"),
+    "defeituoso":  ("⚠️", "Defeituoso"),
+    "kit_defeito": ("🔢", "Nº Kit"),
+    "obs_item":    ("💬", "Descrição do Defeito"),
+}
+
+
+def _humanizar(valor: str) -> str:
+    if valor == "True":  return "Sim"
+    if valor == "False": return "Não"
+    return valor if valor else "—"
+
+
+def _diff_html(campo: str, antes: str, depois: str) -> str:
+    icon, nome = _CAMPO_LABEL.get(campo, ("•", campo.replace("_", " ").title()))
+    return (
+        f'<div class="diff-row">'
+        f'<span class="diff-label">{icon} {nome}</span>'
+        f'<span class="diff-antes">{_humanizar(antes)}</span>'
+        f'<span class="diff-arrow">→</span>'
+        f'<span class="diff-depois">{_humanizar(depois)}</span>'
+        f'</div>'
+    )
+
+
+def render_auditoria(entrada: dict) -> None:
+    """Renderiza uma entrada de auditoria de forma visual e estruturada."""
+    dt_brt = entrada.get("alterado_em_brt")
+    ts_str = dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)" if dt_brt else "—"
+    autor  = entrada.get("alterado_por")  or "não informado"
+    just   = entrada.get("justificativa") or "sem justificativa"
+    diff   = entrada.get("diff", {})
+
+    with st.container(border=True):
+        h1, h2 = st.columns([3, 2])
+        h1.markdown(f"🕐 **{ts_str}**")
+        h2.markdown(f"👤 **{autor}**")
+        st.caption(f"📝 {just}")
+
+        campos_escalares = {k: v for k, v in diff.items() if k != "itens"}
+        itens_diff       = diff.get("itens", {})
+        total            = len(campos_escalares) + sum(len(v) for v in itens_diff.values())
+
+        if total == 0:
+            st.caption("Nenhuma diferença detectada nesta edição.")
+            return
+
+        st.markdown(
+            f"<p style='font-size:0.78em;color:#6B7280;margin:4px 0 6px'>"
+            f"{total} campo(s) alterado(s)</p>",
+            unsafe_allow_html=True,
+        )
+
+        if campos_escalares:
+            st.markdown(
+                "".join(_diff_html(c, v["antes"], v["depois"])
+                        for c, v in campos_escalares.items()),
+                unsafe_allow_html=True,
+            )
+
+        if itens_diff:
+            st.markdown(
+                "<p class='diff-equip-header'>Checklist de Equipamentos</p>",
+                unsafe_allow_html=True,
+            )
+            for equip, mudancas in itens_diff.items():
+                st.markdown(
+                    f"<p class='diff-equip-name'>🔧 {equip}</p>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    "".join(_diff_html(c, v["antes"], v["depois"])
+                            for c, v in mudancas.items()),
+                    unsafe_allow_html=True,
+                )
+
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📂 Menu")
@@ -71,17 +181,28 @@ with st.sidebar:
         "Equipamentos Defeituosos",
         "Dashboard",
     ]
-    # A página de edição é acessada via query param
-    if "page" in st.query_params and st.query_params["page"] == "Editar":
+    # Fonte de verdade: session_state. Query params são secundários (deep-link / URL).
+    in_edit_mode = st.session_state.get("_edit_mode", False) or (
+        st.query_params.get("page") == "Editar"
+    )
+    if in_edit_mode:
+        # Sincroniza session_state caso tenha chegado via URL (reload, deep-link)
+        if not st.session_state.get("_edit_mode"):
+            st.session_state["_edit_mode"] = True
+            _rid_url = st.query_params.get("id", "0")
+            st.session_state["_edit_rid"] = int(_rid_url) if _rid_url else 0
         st.info("✏️ Modo de Edição Ativo")
         if st.button("⬅️ Voltar"):
+            st.session_state.pop("_edit_mode", None)
+            st.session_state.pop("_edit_rid", None)
             st.query_params.clear()
             if "edit_state" in st.session_state:
                 del st.session_state["edit_state"]
             st.rerun()
         pagina = "Editar Registro"
     else:
-        pagina = st.radio("Navegação", paginas_visiveis, label_visibility="collapsed")
+        pagina = st.radio("Navegação", paginas_visiveis, key="nav_radio",
+                          label_visibility="collapsed")
     st.markdown("---")
     stats = stats_gerais()
     st.markdown(f"""
@@ -93,7 +214,11 @@ with st.sidebar:
     - Kits movimentados: **{stats['total_kits']}**
     """)
     st.markdown("---")
-    st.caption(f"☁️ Banco: Supabase (PostgreSQL) · Versão {VERSION} /n · by Wellington Miguel")
+    st.caption(f"☁️ Banco: Supabase (PostgreSQL) · Versão {VERSION} · by Wellington Miguel")
+    st.markdown("---")
+    if st.button("🔒 Sair", use_container_width=True):
+        st.session_state["autenticado"] = False
+        st.rerun()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -332,48 +457,16 @@ elif pagina == "Consultar Registros":
                 if audit:
                     with tabs[1]:
                         for entrada in audit:
-                            dt_brt = entrada.get("alterado_em_brt")
-                            ts_str = (dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)"
-                                      if dt_brt else "—")
-                            just   = entrada.get("justificativa") or "*(sem justificativa)*"
-                            autor  = entrada.get("alterado_por")  or "*(não informado)*"
-                            diff   = entrada.get("diff", {})
-
-                            st.markdown(f"**🕐 {ts_str}** · Autor: {autor}")
-                            st.markdown(f"*Justificativa:* {just}")
-
-                            if diff:
-                                campos_escalares = {k: v for k, v in diff.items()
-                                                    if k != "itens"}
-                                if campos_escalares:
-                                    st.markdown("**Campos alterados:**")
-                                    for campo, vals in campos_escalares.items():
-                                        label = campo.replace("_", " ").title()
-                                        st.markdown(
-                                            f"- **{label}:** "
-                                            f"`{vals['antes']}` → `{vals['depois']}`"
-                                        )
-                                itens_diff = diff.get("itens", {})
-                                if itens_diff:
-                                    st.markdown("**Checklist alterado:**")
-                                    for equip, mudancas in itens_diff.items():
-                                        for campo, vals in mudancas.items():
-                                            label = campo.replace("_", " ").title()
-                                            st.markdown(
-                                                f"- **{equip} / {label}:** "
-                                                f"`{vals['antes']}` → `{vals['depois']}`"
-                                            )
-                            else:
-                                st.caption("Nenhuma diferença detectada nesta edição.")
-                            st.markdown("---")
+                            render_auditoria(entrada)
 
                 # ── Botões de ação ─────────────────────────────────────────────
                 btn1, btn2, btn3 = st.columns([1, 1.5, 4])
                 with btn1:
                     if st.button("✏️ Editar", key=f"edit_{reg['id']}", use_container_width=True):
+                        st.session_state["_edit_mode"] = True
+                        st.session_state["_edit_rid"]  = reg["id"]
                         st.query_params["page"] = "Editar"
                         st.query_params["id"]   = reg["id"]
-                        # Limpa estado de edição anterior, se houver
                         if "edit_state" in st.session_state:
                             del st.session_state["edit_state"]
                         st.rerun()
@@ -399,9 +492,9 @@ elif pagina == "Consultar Registros":
 # Formulário estável: dados carregados UMA VEZ no session_state.
 # Checkboxes e outros inputs não causam recarregamento do banco.
 # ════════════════════════════════════════════════════════════════════════════
-elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
+elif pagina == "Editar Registro":
 
-    rid_para_editar = int(st.query_params.get("id", 0))
+    rid_para_editar = st.session_state.get("_edit_rid") or int(st.query_params.get("id", 0))
     if not rid_para_editar:
         st.error("ID de registro inválido para edição.")
         st.stop()
@@ -545,32 +638,7 @@ elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
     if audit_existente:
         with st.expander(f"🕵️ Ver Histórico de Alterações Anteriores ({len(audit_existente)})"):
             for entrada in audit_existente:
-                dt_brt = entrada.get("alterado_em_brt")
-                ts_str = dt_brt.strftime("%d/%m/%Y %H:%M") + " (BRT)" if dt_brt else "—"
-                just   = entrada.get("justificativa") or "*(sem justificativa)*"
-                autor  = entrada.get("alterado_por")  or "*(não informado)*"
-                diff   = entrada.get("diff", {})
-
-                st.markdown(f"**🕐 {ts_str}** · Por: **{autor}**")
-                st.markdown(f"*Justificativa:* {just}")
-
-                if diff:
-                    campos_escalares = {k: v for k, v in diff.items() if k != "itens"}
-                    for campo, vals in campos_escalares.items():
-                        label = campo.replace("_", " ").title()
-                        st.markdown(f"- **{label}:** `{vals['antes']}` → `{vals['depois']}`")
-                    itens_diff = diff.get("itens", {})
-                    if itens_diff:
-                        for equip, mudancas in itens_diff.items():
-                            for campo, vals in mudancas.items():
-                                label = campo.replace("_", " ").title()
-                                st.markdown(
-                                    f"- **{equip} / {label}:** "
-                                    f"`{vals['antes']}` → `{vals['depois']}`"
-                                )
-                else:
-                    st.caption("Nenhuma diferença detectada.")
-                st.markdown("---")
+                render_auditoria(entrada)
 
     # ── Botões de ação ─────────────────────────────────────────────────────
     btn_salvar, btn_cancelar = st.columns(2)
@@ -599,9 +667,10 @@ elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
                 )
             st.success(f"✅ Registro #{rid_para_editar} atualizado com sucesso!")
             st.balloons()
-            # Limpa estado e redireciona
             if "edit_state" in st.session_state:
                 del st.session_state["edit_state"]
+            st.session_state.pop("_edit_mode", None)
+            st.session_state.pop("_edit_rid", None)
             st.query_params.clear()
             import time; time.sleep(1)
             st.rerun()
@@ -609,6 +678,8 @@ elif pagina == "Editar Registro" and st.query_params.get("page") == "Editar":
     if btn_cancelar.button("❌ Cancelar Edição", use_container_width=True):
         if "edit_state" in st.session_state:
             del st.session_state["edit_state"]
+        st.session_state.pop("_edit_mode", None)
+        st.session_state.pop("_edit_rid", None)
         st.query_params.clear()
         st.rerun()
 
