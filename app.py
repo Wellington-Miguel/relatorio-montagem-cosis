@@ -21,7 +21,7 @@ from constants import (
 from database import (
     init_db, salvar_registro, deletar_registro, atualizar_registro,
     buscar_um_registro, buscar_registros, buscar_itens, buscar_defeituosos,
-    buscar_audit_log, listar_locais,
+    buscar_chamados, buscar_audit_log, listar_locais,
     stats_gerais, serie_temporal, defeitos_por_equipamento,
     operacoes_por_tecnico, ultimos_registros,
     to_brasilia,
@@ -51,7 +51,10 @@ def _check_auth():
     st.caption("Informe a senha para acessar o sistema.")
     senha = st.text_input("Senha", type="password", key="_auth_senha")
     if st.button("Entrar", type="primary"):
-        senha_correta = st.secrets.get("APP_PASSWORD", "")
+        try:
+            senha_correta = st.secrets["APP_PASSWORD"]
+        except (KeyError, FileNotFoundError):
+            senha_correta = ""
         if not senha_correta:
             st.error("APP_PASSWORD não configurada nos secrets do app.")
         elif senha == senha_correta:
@@ -99,6 +102,7 @@ _CAMPO_LABEL: dict = {
     "defeituoso":  ("⚠️", "Defeituoso"),
     "kit_defeito": ("🔢", "Nº Kit"),
     "obs_item":    ("💬", "Descrição do Defeito"),
+    "num_chamado": ("📞", "Nº Chamado"),
 }
 
 
@@ -173,20 +177,21 @@ def render_auditoria(entrada: dict) -> None:
 
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
+_NAV = [
+    ("📋", "Novo Registro"),
+    ("🔍", "Consultar Registros"),
+    ("📞", "Chamados"),
+    ("⚠️", "Equipamentos Defeituosos"),
+    ("📊", "Dashboard"),
+]
+
 with st.sidebar:
     st.markdown("## 📂 Menu")
-    paginas_visiveis = [
-        "Novo Registro",
-        "Consultar Registros",
-        "Equipamentos Defeituosos",
-        "Dashboard",
-    ]
     # Fonte de verdade: session_state. Query params são secundários (deep-link / URL).
     in_edit_mode = st.session_state.get("_edit_mode", False) or (
         st.query_params.get("page") == "Editar"
     )
     if in_edit_mode:
-        # Sincroniza session_state caso tenha chegado via URL (reload, deep-link)
         if not st.session_state.get("_edit_mode"):
             st.session_state["_edit_mode"] = True
             _rid_url = st.query_params.get("id", "0")
@@ -201,8 +206,16 @@ with st.sidebar:
             st.rerun()
         pagina = "Editar Registro"
     else:
-        pagina = st.radio("Navegação", paginas_visiveis, key="nav_radio",
-                          label_visibility="collapsed")
+        if "nav_page_sel" not in st.session_state:
+            st.session_state["nav_page_sel"] = "Novo Registro"
+        for _icon, _nome in _NAV:
+            _ativo = st.session_state["nav_page_sel"] == _nome
+            if st.button(f"{_icon}  {_nome}", key=f"nav_{_nome}",
+                         use_container_width=True,
+                         type="primary" if _ativo else "secondary"):
+                st.session_state["nav_page_sel"] = _nome
+                st.rerun()
+        pagina = st.session_state["nav_page_sel"]
     st.markdown("---")
     stats = stats_gerais()
     st.markdown(f"""
@@ -277,26 +290,32 @@ if pagina == "Novo Registro" and "page" not in st.query_params:
     itens_form = []
     for eq in EQUIPAMENTOS:
         with st.container(border=True):
-            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
+            c1, c2, c3 = st.columns([3, 1, 1])
             with c1:
                 st.markdown(f"**{eq}**")
             with c2:
                 consta = st.checkbox("Consta", key=f"consta_{eq}", value=True)
             with c3:
                 defeituoso = st.checkbox("Defeito", key=f"def_{eq}")
-            kit_def = obs_item = ""
+            kit_def = obs_item = num_chamado = ""
             if defeituoso:
-                with c4:
-                    kit_def = st.text_input("Nº Kit", key=f"kitdef_{eq}", placeholder="Ex: 03")
-                with c5:
+                d1, d2, d3 = st.columns([1, 2.5, 2])
+                with d1:
+                    kit_def = st.text_input("Nº Kit", key=f"kitdef_{eq}",
+                                            placeholder="Ex: 03")
+                with d2:
                     obs_item = st.text_input("Descrição do defeito", key=f"obs_{eq}",
                                              placeholder="Descreva brevemente...")
+                with d3:
+                    num_chamado = st.text_input("📞 Nº Chamado", key=f"chamado_{eq}",
+                                                placeholder="Ex: CHM-001")
         itens_form.append({
-            "equipamento": eq,
-            "consta":      consta,
-            "defeituoso":  defeituoso,
-            "kit_defeito": kit_def,
-            "obs_item":    obs_item,
+            "equipamento":  eq,
+            "consta":       consta,
+            "defeituoso":   defeituoso,
+            "kit_defeito":  kit_def,
+            "obs_item":     obs_item,
+            "num_chamado":  num_chamado,
         })
 
     st.markdown("---")
@@ -416,8 +435,10 @@ elif pagina == "Consultar Registros":
             )
             with st.expander(expander_label):
 
-                # ── Linha de status + ações (compacta) ───────────────────────
-                st.markdown(f"**Status:** {badges}", unsafe_allow_html=True)
+                # ── Técnico em destaque + status ─────────────────────────
+                tec_col, badge_col = st.columns([2, 3])
+                tec_col.markdown(f"👤 **{reg['tecnico']}**")
+                badge_col.markdown(f"**Status:** {badges}", unsafe_allow_html=True)
 
                 # Linha 1 — métricas essenciais em 4 colunas
                 m1, m2, m3, m4 = st.columns(4)
@@ -452,6 +473,7 @@ elif pagina == "Consultar Registros":
                         itens_para_df_exibicao(itens),
                         use_container_width=True,
                         hide_index=True,
+                        height=240,
                     )
 
                 if audit:
@@ -570,11 +592,10 @@ elif pagina == "Editar Registro":
     for eq in EQUIPAMENTOS:
         item_ex = itens_map.get(eq, {})
         with st.container(border=True):
-            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 2.5])
+            c1, c2, c3 = st.columns([3, 1, 1])
             with c1:
                 st.markdown(f"**{eq}**")
             with c2:
-                # Chave única que inclui o RID para não conflitar com outros forms
                 consta = st.checkbox("Consta",
                                      value=item_ex.get("consta", True),
                                      key=f"e_consta_{eq}_{rid_para_editar}")
@@ -582,23 +603,31 @@ elif pagina == "Editar Registro":
                 defeituoso = st.checkbox("Defeito",
                                          value=item_ex.get("defeituoso", False),
                                          key=f"e_def_{eq}_{rid_para_editar}")
-            kit_def = obs_item = ""
+            kit_def = obs_item = num_chamado = ""
             if defeituoso:
-                with c4:
+                d1, d2, d3 = st.columns([1, 2.5, 2])
+                with d1:
                     kit_def = st.text_input(
                         "Nº Kit", value=item_ex.get("kit_defeito", ""),
                         key=f"e_kitdef_{eq}_{rid_para_editar}", placeholder="Ex: 03")
-                with c5:
+                with d2:
                     obs_item = st.text_input(
                         "Descrição do defeito", value=item_ex.get("obs_item", ""),
-                        key=f"e_obs_{eq}_{rid_para_editar}", placeholder="Descreva brevemente...")
+                        key=f"e_obs_{eq}_{rid_para_editar}",
+                        placeholder="Descreva brevemente...")
+                with d3:
+                    num_chamado = st.text_input(
+                        "📞 Nº Chamado", value=item_ex.get("num_chamado", ""),
+                        key=f"e_chamado_{eq}_{rid_para_editar}",
+                        placeholder="Ex: CHM-001")
 
         itens_form.append({
-            "equipamento": eq,
-            "consta":      consta,
-            "defeituoso":  defeituoso,
-            "kit_defeito": kit_def,
-            "obs_item":    obs_item,
+            "equipamento":  eq,
+            "consta":       consta,
+            "defeituoso":   defeituoso,
+            "kit_defeito":  kit_def,
+            "obs_item":     obs_item,
+            "num_chamado":  num_chamado,
         })
 
     st.markdown("---")
@@ -685,7 +714,81 @@ elif pagina == "Editar Registro":
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# PÁGINA 3 — EQUIPAMENTOS DEFEITUOSOS
+# PÁGINA 3 — CHAMADOS
+# ════════════════════════════════════════════════════════════════════════════
+elif pagina == "Chamados":
+
+    st.subheader("📞 Chamados de Suporte")
+    st.caption("Equipamentos defeituosos com Nº Chamado registrado.")
+
+    with st.expander("🎛️ Filtros", expanded=True):
+        cf1, cf2, cf3, cf4, cf5 = st.columns([2, 2, 1, 1, 2])
+        with cf1:
+            cf_tec = st.selectbox("👤 Técnico", ["Todos"] + TECNICOS, key="cf_tec")
+        with cf2:
+            cf_eq  = st.selectbox("🔧 Equipamento", ["Todos"] + EQUIPAMENTOS, key="cf_eq")
+        with cf3:
+            cf_ini = st.date_input("📅 De",  value=date(2020, 1, 1), key="cf_ini",
+                                   format="DD/MM/YYYY")
+        with cf4:
+            cf_fim = st.date_input("📅 Até", value=date.today(), key="cf_fim",
+                                   format="DD/MM/YYYY")
+        with cf5:
+            cf_num = st.text_input("📞 Nº Chamado", placeholder="Buscar número...",
+                                   key="cf_num")
+
+    chamados = buscar_chamados(
+        data_ini=cf_ini, data_fim=cf_fim,
+        tecnico=cf_tec if cf_tec != "Todos" else None,
+        equipamento=cf_eq,
+        num_chamado=cf_num or None,
+    )
+
+    st.markdown(f"**{len(chamados)} chamado(s) encontrado(s)**")
+
+    if not chamados:
+        st.info("📭 Nenhum chamado encontrado para os filtros aplicados.")
+    else:
+        df_ch = pd.DataFrame(chamados).rename(columns={
+            "reg_id":      "ID Reg.",
+            "data_evento": "Data",
+            "tipo":        "Tipo",
+            "local":       "Local",
+            "tecnico":     "Técnico",
+            "kits_usados": "Kits",
+            "equipamento": "Equipamento",
+            "kit_defeito": "Nº Kit",
+            "obs_item":    "Descrição do Defeito",
+            "num_chamado": "Nº Chamado",
+        })
+        df_ch["Data"] = pd.to_datetime(df_ch["Data"]).dt.strftime("%d/%m/%Y")
+
+        st.dataframe(
+            df_ch,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ID Reg.":     st.column_config.NumberColumn(width="small"),
+                "Nº Chamado":  st.column_config.TextColumn("📞 Nº Chamado", width="medium"),
+                "Data":        st.column_config.TextColumn(width="small"),
+            },
+        )
+
+        st.markdown("---")
+        ce1, ce2, _ = st.columns([1, 1, 3])
+        with ce1:
+            st.download_button("⬇️ Exportar CSV", data=to_csv_bytes(df_ch),
+                               file_name=f"chamados_{date.today()}.csv",
+                               mime="text/csv", key="dl_ch_csv")
+        with ce2:
+            st.download_button("⬇️ Exportar Excel", data=to_excel_bytes(df_ch),
+                               file_name=f"chamados_{date.today()}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               key="dl_ch_xlsx")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PÁGINA 4 — EQUIPAMENTOS DEFEITUOSOS
 # ════════════════════════════════════════════════════════════════════════════
 elif pagina == "Equipamentos Defeituosos":
 

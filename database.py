@@ -141,6 +141,7 @@ def init_db():
     # Migrações seguras para bancos mais antigos
     _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS kits_usados TEXT NOT NULL DEFAULT '';")
     _exec("ALTER TABLE registros ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ;")
+    _exec("ALTER TABLE itens ADD COLUMN IF NOT EXISTS num_chamado TEXT NOT NULL DEFAULT '';")
     # Índices
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_data      ON registros(data_evento)")
     _exec("CREATE INDEX IF NOT EXISTS idx_reg_tec       ON registros(tecnico)")
@@ -169,11 +170,13 @@ def salvar_registro(tecnico, tipo, local, qtd_kits, kits_usados,
             psycopg2.extras.execute_values(
                 cur,
                 """INSERT INTO itens
-                   (registro_id, equipamento, consta, defeituoso, kit_defeito, obs_item)
+                   (registro_id, equipamento, consta, defeituoso,
+                    kit_defeito, obs_item, num_chamado)
                    VALUES %s""",
                 [
                     (rid, i["equipamento"], bool(i["consta"]), bool(i["defeituoso"]),
-                     i.get("kit_defeito") or "", i.get("obs_item") or "")
+                     i.get("kit_defeito") or "", i.get("obs_item") or "",
+                     i.get("num_chamado") or "")
                     for i in itens
                 ],
             )
@@ -216,7 +219,7 @@ def _build_diff(reg_antigo: dict, itens_antigos: list[dict],
     for eq in set(list(mapa_antigo.keys()) + list(mapa_novo.keys())):
         ant = mapa_antigo.get(eq, {})
         nov = mapa_novo.get(eq, {})
-        campos_item = ["consta", "defeituoso", "kit_defeito", "obs_item"]
+        campos_item = ["consta", "defeituoso", "kit_defeito", "obs_item", "num_chamado"]
         item_ch: dict = {}
         for c in campos_item:
             if c in ("consta", "defeituoso"):
@@ -280,11 +283,13 @@ def atualizar_registro(rid: int, tecnico, tipo, local, qtd_kits, kits_usados,
             psycopg2.extras.execute_values(
                 cur,
                 """INSERT INTO itens
-                   (registro_id, equipamento, consta, defeituoso, kit_defeito, obs_item)
+                   (registro_id, equipamento, consta, defeituoso,
+                    kit_defeito, obs_item, num_chamado)
                    VALUES %s""",
                 [
                     (rid, i["equipamento"], bool(i["consta"]), bool(i["defeituoso"]),
-                     i.get("kit_defeito") or "", i.get("obs_item") or "")
+                     i.get("kit_defeito") or "", i.get("obs_item") or "",
+                     i.get("num_chamado") or "")
                     for i in itens
                 ],
             )
@@ -392,7 +397,8 @@ def buscar_defeituosos(data_ini=None, data_fim=None,
                r.kits_usados,
                i.equipamento,
                i.kit_defeito,
-               i.obs_item
+               i.obs_item,
+               i.num_chamado
         FROM itens i
         JOIN registros r ON r.id = i.registro_id
         WHERE i.defeituoso = TRUE
@@ -406,6 +412,43 @@ def buscar_defeituosos(data_ini=None, data_fim=None,
         sql += " AND LOWER(r.tecnico) LIKE %s"; params.append(f"%{tecnico.lower()}%")
     if equipamento and equipamento != "Todos":
         sql += " AND i.equipamento = %s"; params.append(equipamento)
+    sql += " ORDER BY r.data_evento DESC, r.id DESC"
+    rows = _exec(sql, params, fetch="all") or []
+    for r in rows:
+        r["data_evento"] = str(r["data_evento"])
+    return rows
+
+
+def buscar_chamados(data_ini=None, data_fim=None,
+                    tecnico=None, equipamento=None, num_chamado=None) -> list[dict]:
+    """Retorna itens defeituosos que possuem Nº Chamado preenchido."""
+    sql = """
+        SELECT r.id           AS reg_id,
+               r.data_evento,
+               r.tipo,
+               r.local,
+               r.tecnico,
+               r.kits_usados,
+               i.equipamento,
+               i.kit_defeito,
+               i.obs_item,
+               i.num_chamado
+        FROM itens i
+        JOIN registros r ON r.id = i.registro_id
+        WHERE i.defeituoso = TRUE
+          AND i.num_chamado != ''
+    """
+    params = []
+    if data_ini:
+        sql += " AND r.data_evento >= %s"; params.append(str(data_ini))
+    if data_fim:
+        sql += " AND r.data_evento <= %s"; params.append(str(data_fim))
+    if tecnico:
+        sql += " AND LOWER(r.tecnico) LIKE %s"; params.append(f"%{tecnico.lower()}%")
+    if equipamento and equipamento != "Todos":
+        sql += " AND i.equipamento = %s"; params.append(equipamento)
+    if num_chamado:
+        sql += " AND LOWER(i.num_chamado) LIKE %s"; params.append(f"%{num_chamado.lower()}%")
     sql += " ORDER BY r.data_evento DESC, r.id DESC"
     rows = _exec(sql, params, fetch="all") or []
     for r in rows:

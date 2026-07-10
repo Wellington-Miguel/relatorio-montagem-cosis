@@ -28,6 +28,7 @@ def registros_para_dataframe(registros: list[dict]) -> pd.DataFrame:
                 "Defeituoso":           "Sim" if item["defeituoso"] else "Não",
                 "Nº Kit Defeituoso":    item["kit_defeito"],
                 "Obs. Equipamento":     item["obs_item"],
+                "Nº Chamado":           item.get("num_chamado", ""),
                 "Registrado em":        formatar_data(reg["criado_em"]),
             })
     return pd.DataFrame(rows)
@@ -68,15 +69,19 @@ def formatar_tipo(tipo: str) -> str:
 
 
 def itens_para_df_exibicao(itens: list[dict]) -> pd.DataFrame:
-    df = pd.DataFrame(itens)[
-        ["equipamento", "consta", "defeituoso", "kit_defeito", "obs_item"]
-    ].rename(columns={
+    cols = ["equipamento", "consta", "defeituoso", "kit_defeito", "obs_item"]
+    rename = {
         "equipamento": "Equipamento",
         "consta":      "Consta",
         "defeituoso":  "Defeituoso",
         "kit_defeito": "Nº Kit",
         "obs_item":    "Obs. Equipamento",
-    })
+    }
+    # Só exibe coluna Nº Chamado se ao menos um item tiver chamado preenchido
+    if any(i.get("num_chamado") for i in itens):
+        cols.append("num_chamado")
+        rename["num_chamado"] = "📞 Nº Chamado"
+    df = pd.DataFrame(itens)[cols].rename(columns=rename)
     df["Consta"]     = df["Consta"].map({1: "✅ Sim", 0: "❌ Não"})
     df["Defeituoso"] = df["Defeituoso"].map({1: "⚠️ Sim", 0: "—"})
     return df

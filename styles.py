@@ -59,6 +59,39 @@ div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:f
 /* ── Linhas separadoras sutis ────────────────────────────── */
 hr { border-color: rgba(255, 255, 255, 0.05) !important; margin: 2rem 0; }
 
+/* ── Navegação Lateral (botões) ──────────────────────────── */
+section[data-testid="stSidebar"] .stButton > button {
+    text-align: left !important;
+    justify-content: flex-start !important;
+    border-radius: 8px !important;
+    font-size: 0.88em !important;
+    font-weight: 500 !important;
+    padding: 0.45rem 0.85rem !important;
+    transition: background 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    margin-bottom: 2px !important;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: #9CA3AF !important;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #E5E7EB !important;
+    border-color: rgba(255, 255, 255, 0.07) !important;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: rgba(80, 200, 120, 0.1) !important;
+    border: 1px solid rgba(80, 200, 120, 0.28) !important;
+    color: #50C878 !important;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+    background: rgba(80, 200, 120, 0.17) !important;
+}
+
 /* ── Histórico de Auditoria — Diff Visual ────────────────── */
 .diff-row {
     display: flex;
